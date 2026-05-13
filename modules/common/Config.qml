@@ -491,6 +491,15 @@ Singleton {
                         property bool showShadow: true
                         property int timeScale: 100
                         property int dateScale: 100
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property bool showBackground: false
+                        property bool showBorder: false
+                        property real backgroundOpacity: 0
+                        property real borderWidth: 0
+                        property real borderOpacity: 0.08
+                        property real cornerRadius: -1
+                        property string colorMode: "auto"
                         property JsonObject cookie: JsonObject {
                             property bool aiStyling: false
                             property int sides: 14
@@ -504,9 +513,14 @@ Singleton {
                             property bool dateInClock: true
                             property bool constantlyRotate: false
                             property bool useSineCookie: false
+                            property int size: 230
+                            property string preset: "default"
                         }
                         property JsonObject digital: JsonObject {
                             property bool animateChange: true
+                            property int fontWeight: 600
+                            property int spacing: 6
+                            property string preset: "default"
                         }
                         property JsonObject quote: JsonObject {
                             property bool enable: false
@@ -518,6 +532,20 @@ Singleton {
                         property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
                         property real x: 400
                         property real y: 100
+                        property int size: 200
+                        property int tempSize: 80
+                        property int iconSize: 80
+                        property bool showTemp: true
+                        property bool showIcon: true
+                        property bool showCondition: false
+                        property int padding: 20
+                        property int tempFontWeight: 500 // Font.Medium
+                        property real conditionOpacity: 0.7
+                        property string preset: "default"
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property string colorMode: "auto"
+                        property int dim: 0
                     }
 
                     property JsonObject mediaControls: JsonObject {
@@ -526,13 +554,95 @@ Singleton {
                         property string playerPreset: "full" // "full", "compact", "minimal", "albumart", "visualizer", "classic"
                         property real x: 240
                         property real y: 240
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property string colorMode: "auto"
+                        property int dim: 0
                     }
 
                     property JsonObject visualizer: JsonObject {
                         property bool enable: false
-                        property string placementStrategy: "free" // "free", "leastBusy", "mostBusy"
+                        property string placementStrategy: "free"
+                        property int barCount: 48
+                        property int barSpacing: 2
+                        property int barRadius: 2
+                        property int barMinHeight: 1
+                        property int contentWidth: 304
+                        property int contentHeight: 104
+                        property string preset: "default"
+                        property int dim: 0
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property bool showBackground: true
+                        property bool showBorder: true
+                        property real backgroundOpacity: 0.06
+                        property real borderWidth: 1
+                        property real borderOpacity: 0.08
+                        property real cornerRadius: -1
+                        property string colorMode: "auto"
                         property real x: 100
                         property real y: 100
+                    }
+
+                    property JsonObject systemMonitor: JsonObject {
+                        property bool enable: false
+                        property string placementStrategy: "free"
+                        property string displayMode: "bars"
+                        property int barCount: 32
+                        property int barSpacing: 2
+                        property real trackAlpha: 0.08
+                        property real fillOpacity: 0.7
+                        property real graphFillOpacity: 0.3
+                        property bool showCpu: true
+                        property bool showMemory: true
+                        property bool showGpu: true
+                        property bool showLabels: true
+                        property int contentWidth: 320
+                        property int contentHeight: 120
+                        property string preset: "default"
+                        property int dim: 0
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property bool showBackground: true
+                        property bool showBorder: true
+                        property real backgroundOpacity: 0.06
+                        property real borderWidth: 1
+                        property real borderOpacity: 0.08
+                        property real cornerRadius: -1
+                        property string colorMode: "auto"
+                        property real x: 50
+                        property real y: 400
+                    }
+
+                    property JsonObject battery: JsonObject {
+                        property bool enable: false
+                        property string placementStrategy: "free"
+                        property string displayMode: "ring"
+                        property bool showTime: true
+                        property int ringSize: 72
+                        property int ringLineWidth: 6
+                        property int barCount: 20
+                        property int barSpacing: 2
+                        property int barRadius: 2
+                        property int pillHeight: 12
+                        property string preset: "default"
+                        property int dim: 0
+                        property int widgetScale: 100
+                        property int widgetOpacity: 100
+                        property bool showBackground: true
+                        property bool showBorder: true
+                        property real backgroundOpacity: 0.06
+                        property real borderWidth: 1
+                        property real borderOpacity: 0.08
+                        property real cornerRadius: -1
+                        property string colorMode: "auto"
+                        property real x: 50
+                        property real y: 50
+                    }
+
+                    property JsonObject editGrid: JsonObject {
+                        property int size: 32
+                        property bool snap: true
                     }
                 }
                 property string wallpaperPath: ""

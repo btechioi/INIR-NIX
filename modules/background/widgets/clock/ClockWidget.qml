@@ -13,9 +13,87 @@ AbstractBackgroundWidget {
     id: root
 
     configEntryName: "clock"
+    defaultConfig: ({
+        placementStrategy: "leastBusy", style: "cookie",
+        fontFamily: "Space Grotesk", timeFormat: "system",
+        showSeconds: false, showDate: true, dateStyle: "long",
+        timeScale: 100, dateScale: 100, showShadow: true, dim: 55,
+        "digital.animateChange": true, "digital.fontWeight": 600,
+        "digital.spacing": 6, "digital.preset": "default",
+        widgetScale: 100, widgetOpacity: 100, colorMode: "auto",
+        x: 100, y: 100
+    })
 
     implicitHeight: contentColumn.implicitHeight
     implicitWidth: contentColumn.implicitWidth
+
+    editPopoverContent: Component {
+        Item {
+            implicitWidth: _clockCol.implicitWidth
+            implicitHeight: _clockCol.implicitHeight
+            Column {
+                id: _clockCol
+                spacing: 6
+                Row {
+                    spacing: 4
+                    RippleButton {
+                        width: 86; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.clockStyle === "digital"
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.clock.style", "digital")
+                        contentItem: StyledText { anchors.centerIn: parent; text: "Digital"; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                    RippleButton {
+                        width: 86; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.clockStyle === "cookie"
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.clock.style", "cookie")
+                        contentItem: StyledText { anchors.centerIn: parent; text: "Cookie"; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                }
+                Row {
+                    spacing: 4
+                    visible: root.clockStyle === "digital"
+                    RippleButton {
+                        width: 56; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.timeFormat === "system"
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.clock.timeFormat", "system")
+                        contentItem: StyledText { anchors.centerIn: parent; text: "Sys"; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                    RippleButton {
+                        width: 56; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.timeFormat === "24h"
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.clock.timeFormat", "24h")
+                        contentItem: StyledText { anchors.centerIn: parent; text: "24h"; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                    RippleButton {
+                        width: 56; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.timeFormat === "12h"
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.clock.timeFormat", "12h")
+                        contentItem: StyledText { anchors.centerIn: parent; text: "12h"; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                }
+            }
+        }
+    }
 
     property string clockStyle: Config.options?.background?.widgets?.clock?.style ?? "cookie"
     property bool forceCenter: (GlobalStates.screenLocked && (Config.options?.lock?.centerClock ?? false))
@@ -32,6 +110,8 @@ AbstractBackgroundWidget {
     property int timeScale: Config.options?.background?.widgets?.clock?.timeScale ?? 100
     property int dateScale: Config.options?.background?.widgets?.clock?.dateScale ?? 100
     property bool showShadow: Config.options?.background?.widgets?.clock?.showShadow ?? true
+    property int digitalFontWeight: Config.options?.background?.widgets?.clock?.digital?.fontWeight ?? 600
+    property int digitalSpacing: Config.options?.background?.widgets?.clock?.digital?.spacing ?? 6
 
     // Local clock with seconds precision when needed
     SystemClock {
@@ -89,6 +169,10 @@ AbstractBackgroundWidget {
         return Text.AlignHCenter;
     }
 
+    // ── Style tokens ──
+    readonly property real cardRadius: Appearance.angelEverywhere ? Appearance.angel.roundingNormal
+        : Appearance.inirEverywhere ? Appearance.inir.roundingNormal : Appearance.rounding.normal
+
     // Per-clock dim factor (0..1), independent from wallpaper dim
     property real dimFactor: {
         const v = Config.options?.background?.widgets?.clock?.dim ?? 0;
@@ -102,10 +186,20 @@ AbstractBackgroundWidget {
         return ColorUtils.mix(root.colText, dark, dimFactor);
     }
 
+    // Card background (mainly for digital mode)
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -Math.round(8 * root.scaleFactor)
+        radius: root.cornerRadiusOverride >= 0 ? root.cornerRadiusOverride : root.cardRadius
+        color: root.backgroundOpacity > 0 ? ColorUtils.applyAlpha(root.colText, root.backgroundOpacity) : "transparent"
+        border { width: root.borderWidth; color: ColorUtils.applyAlpha(root.colText, root.borderOpacity) }
+        visible: (root.backgroundOpacity > 0 || root.borderWidth > 0) && root.clockStyle === "digital"
+    }
+
     Column {
         id: contentColumn
         anchors.centerIn: parent
-        spacing: 6
+        spacing: Math.round(6 * root.scaleFactor)
 
         FadeLoader {
             id: cookieClockLoader
@@ -114,6 +208,7 @@ AbstractBackgroundWidget {
             sourceComponent: Column {
                 CookieClock {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    scaleFactor: root.scaleFactor
                 }
                 FadeLoader {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -130,16 +225,16 @@ AbstractBackgroundWidget {
             shown: root.clockStyle === "digital"
             sourceComponent: ColumnLayout {
                 id: clockColumn
-                spacing: 6
+                spacing: Math.round(root.digitalSpacing * root.scaleFactor)
 
                 ClockText {
-                    font.pixelSize: Math.round(90 * Appearance.fontSizeScale * root.timeScale / 100)
+                    font.pixelSize: Math.round(90 * Appearance.fontSizeScale * root.timeScale / 100 * root.scaleFactor)
                     text: root.timeText
                 }
                 ClockText {
                     visible: root.showDate
-                    Layout.topMargin: -5
-                    font.pixelSize: Math.round(20 * root.dateScale / 100)
+                    Layout.topMargin: Math.round(-5 * root.scaleFactor)
+                    font.pixelSize: Math.round(20 * root.dateScale / 100 * root.scaleFactor)
                     text: root.dateText
                 }
                 StyledText {
@@ -149,7 +244,7 @@ AbstractBackgroundWidget {
                     Layout.fillWidth: true
                     horizontalAlignment: root.textHorizontalAlignment
                     font {
-                        pixelSize: Appearance.font.pixelSize.normal
+                        pixelSize: Math.round(Appearance.font.pixelSize.normal * root.scaleFactor)
                         weight: 350
                     }
                     color: root.clockTextColor
@@ -225,7 +320,7 @@ AbstractBackgroundWidget {
         font {
             family: root.clockFontFamily
             pixelSize: 20
-            weight: Font.DemiBold
+            weight: root.digitalFontWeight
         }
         color: root.clockTextColor
         style: root.showShadow ? Text.Raised : Text.Normal

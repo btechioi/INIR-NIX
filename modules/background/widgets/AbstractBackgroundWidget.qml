@@ -4,8 +4,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs
+import qs.services
 import qs.modules.common
 import qs.modules.common.functions
+import qs.modules.common.widgets
 import qs.modules.common.widgets.widgetCanvas
 
 AbstractWidget {
@@ -18,58 +20,174 @@ AbstractWidget {
     required property int scaledScreenHeight
     required property real wallpaperScale
     property bool visibleWhenLocked: false
+    property int widgetIndex: 0 // used to offset auto-placed widgets so they don't stack
     property var configEntry: Config.options?.background?.widgets?.[configEntryName] ?? {}
-    property string placementStrategy: configEntry.placementStrategy
+
+    // ── Per-widget customization (inherited by all widgets) ──
+    readonly property real _baseScale: {
+        const v = Number(configEntry?.widgetScale ?? 100);
+        return Math.max(0.5, Math.min(2.0, Number.isFinite(v) ? v / 100 : 1.0));
+    }
+    // scaleFactor: the final multiplier widgets use for layout dimensions and font sizes.
+    // Includes press bump when dragging. Widgets should multiply their sizes by this
+    // instead of relying on Item.scale (which causes bitmap blur).
+    readonly property real scaleFactor: ((draggable && containsPress) ? 1.05 : 1.0) * _baseScale
+    readonly property real widgetOpacity: {
+        const v = Number(configEntry?.widgetOpacity ?? 100);
+        return Math.max(0, Math.min(1, Number.isFinite(v) ? v / 100 : 1.0));
+    }
+    readonly property bool showBackground: configEntry?.showBackground ?? true
+    readonly property bool showBorder: configEntry?.showBorder ?? true
+    // Granular card controls — override booleans when present
+    readonly property real backgroundOpacity: {
+        const v = configEntry?.backgroundOpacity;
+        return (v !== undefined && v !== null) ? Math.max(0, Math.min(1, Number(v))) : (showBackground ? 0.06 : 0);
+    }
+    readonly property real borderWidth: {
+        const v = configEntry?.borderWidth;
+        return (v !== undefined && v !== null) ? Math.max(0, Math.min(8, Number(v))) : (showBorder ? 1 : 0);
+    }
+    readonly property real borderOpacity: {
+        const v = configEntry?.borderOpacity;
+        return (v !== undefined && v !== null) ? Math.max(0, Math.min(1, Number(v))) : 0.08;
+    }
+    readonly property real cornerRadiusOverride: configEntry?.cornerRadius ?? -1
+    readonly property string colorMode: configEntry?.colorMode ?? "auto"
+    property string placementStrategy: configEntry.placementStrategy ?? "free"
+
+    // ── Snap zones ────────────────────────────────────────────
+    // 9 screen regions for quick widget placement
+    readonly property var _snapZones: [
+        "topLeft", "topCenter", "topRight",
+        "centerLeft", "center", "centerRight",
+        "bottomLeft", "bottomCenter", "bottomRight"
+    ]
+    readonly property var _snapZoneLabels: ({
+        topLeft: "↖", topCenter: "↑", topRight: "↗",
+        centerLeft: "←", center: "⊙", centerRight: "→",
+        bottomLeft: "↙", bottomCenter: "↓", bottomRight: "↘"
+    })
+    // Margin from screen edges for zone placement
+    readonly property int _zoneMargin: 48
+
+    function _getZonePosition(zone: string): point {
+        const m = root._zoneMargin;
+        const w = root.scaledScreenWidth;
+        const h = root.scaledScreenHeight;
+        const ww = root.width;
+        const wh = root.height;
+        const cx = (w - ww) / 2;
+        const cy = (h - wh) / 2;
+        switch (zone) {
+            case "topLeft":      return Qt.point(m, m);
+            case "topCenter":    return Qt.point(cx, m);
+            case "topRight":     return Qt.point(w - ww - m, m);
+            case "centerLeft":   return Qt.point(m, cy);
+            case "center":       return Qt.point(cx, cy);
+            case "centerRight":  return Qt.point(w - ww - m, cy);
+            case "bottomLeft":   return Qt.point(m, h - wh - m);
+            case "bottomCenter": return Qt.point(cx, h - wh - m);
+            case "bottomRight":  return Qt.point(w - ww - m, h - wh - m);
+            default:             return Qt.point(cx, cy);
+        }
+    }
+
+    function _cycleSnapZone(): void {
+        const current = root.placementStrategy;
+        const idx = root._snapZones.indexOf(current);
+        const next = root._snapZones[(idx + 1) % root._snapZones.length];
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".placementStrategy", next);
+    }
+
+    function snapToZone(zone: string): void {
+        const pos = root._getZonePosition(zone);
+        const finalX = root._snapToPixel(pos.x);
+        const finalY = root._snapToPixel(pos.y);
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".placementStrategy", zone);
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".x", finalX);
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".y", finalY);
+    }
+
+    // Detect which zone a position is closest to (for drag-to-snap)
+    function _nearestZone(px: real, py: real): string {
+        let closest = "center";
+        let minDist = Infinity;
+        for (let i = 0; i < root._snapZones.length; i++) {
+            const zone = root._snapZones[i];
+            const pos = root._getZonePosition(zone);
+            const dx = px - pos.x;
+            const dy = py - pos.y;
+            const dist = dx * dx + dy * dy;
+            if (dist < minDist) {
+                minDist = dist;
+                closest = zone;
+            }
+        }
+        return closest;
+    }
+
     function _snapToPixel(value: real): real {
         const numeric = Number(value)
         return Math.round(Number.isFinite(numeric) ? numeric : 0)
     }
+
+    // Zone-aware target position
     property real targetX: {
+        // If strategy is a zone name, compute position from zone
+        if (root._snapZones.indexOf(root.placementStrategy) >= 0) {
+            const pos = root._getZonePosition(root.placementStrategy);
+            return _snapToPixel(pos.x);
+        }
         const rawX = Number(configEntry?.x ?? 0)
         const safeX = Number.isFinite(rawX) ? rawX : 0
         const maxX = Math.max(0, scaledScreenWidth - width)
         return _snapToPixel(Math.max(0, Math.min(safeX, maxX)))
     }
     property real targetY: {
+        if (root._snapZones.indexOf(root.placementStrategy) >= 0) {
+            const pos = root._getZonePosition(root.placementStrategy);
+            return _snapToPixel(pos.y);
+        }
         const rawY = Number(configEntry?.y ?? 0)
         const safeY = Number.isFinite(rawY) ? rawY : 0
         const maxY = Math.max(0, scaledScreenHeight - height)
         return _snapToPixel(Math.max(0, Math.min(safeY, maxY)))
     }
 
+    // Auto-position when NOT free and NOT actively being dragged in edit mode
+    readonly property bool _autoPosition: root.placementStrategy !== "free" && !(GlobalStates.widgetEditMode && root.containsPress)
     Binding {
         target: root
         property: "x"
         value: root.targetX
-        when: root.placementStrategy !== "free"
+        when: root._autoPosition
     }
     Binding {
         target: root
         property: "y"
         value: root.targetY
-        when: root.placementStrategy !== "free"
+        when: root._autoPosition
     }
     Behavior on x {
-        enabled: Appearance.animationsEnabled && root.placementStrategy !== "free"
+        enabled: Appearance.animationsEnabled && root._autoPosition
         NumberAnimation { duration: Appearance.animation.elementMove.duration; easing.type: Appearance.animation.elementMove.type; easing.bezierCurve: Appearance.animation.elementMove.bezierCurve }
     }
     Behavior on y {
-        enabled: Appearance.animationsEnabled && root.placementStrategy !== "free"
+        enabled: Appearance.animationsEnabled && root._autoPosition
         NumberAnimation { duration: Appearance.animation.elementMove.duration; easing.type: Appearance.animation.elementMove.type; easing.bezierCurve: Appearance.animation.elementMove.bezierCurve }
     }
 
     visible: opacity > 0
-    opacity: (GlobalStates.screenLocked && !visibleWhenLocked) ? 0 : 1
+    opacity: ((GlobalStates.screenLocked && !visibleWhenLocked) ? 0 : 1) * widgetOpacity
     enabled: !GlobalStates.screenLocked
     Behavior on opacity {
         animation: NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Appearance.animation.elementMoveFast.type; easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve }
     }
-    scale: (draggable && containsPress) ? 1.05 : 1
-    Behavior on scale {
-        animation: NumberAnimation { duration: Appearance.animation.elementResize.duration; easing.type: Appearance.animation.elementResize.type; easing.bezierCurve: Appearance.animation.elementResize.bezierCurve }
-    }
+    // No Item.scale — widgets use scaleFactor for layout math to avoid bitmap blur
 
-    draggable: placementStrategy === "free" && !GlobalStates.screenLocked
+    // In edit mode, allow dragging regardless of strategy (user can reposition freely)
+    readonly property bool _isZonePlacement: root._snapZones.indexOf(root.placementStrategy) >= 0
+    draggable: (placementStrategy === "free" || (GlobalStates.widgetEditMode && _isZonePlacement)) && !GlobalStates.screenLocked
     function syncFreePositionFromConfig(): void {
         if (!Config.ready) return;
         if (root.placementStrategy !== "free") return;
@@ -77,22 +195,411 @@ AbstractWidget {
         root.y = root.targetY;
     }
 
+    readonly property int _editGridSize: Config.options?.background?.widgets?.editGrid?.size ?? 32
+    readonly property bool _snapEnabled: GlobalStates.widgetEditMode && (Config.options?.background?.widgets?.editGrid?.snap ?? true)
+
+    function _snapToGrid(value: real): real {
+        return Math.round(value / _editGridSize) * _editGridSize;
+    }
+
+    // Snap preview ghost — shows where widget will land while dragging
+    property real _snapPreviewX: _snapEnabled ? _snapToGrid(root.x) : root.x
+    property real _snapPreviewY: _snapEnabled ? _snapToGrid(root.y) : root.y
+    Rectangle {
+        id: snapGhost
+        visible: root.containsPress && root._snapEnabled && root.draggable
+        x: root._snapPreviewX - root.x
+        y: root._snapPreviewY - root.y
+        width: root.width
+        height: root.height
+        radius: Appearance.rounding.small
+        color: "transparent"
+        border.width: 1.5
+        border.color: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.35)
+        opacity: 0.7
+    }
+
+    // ── Edit mode toolbar (proper Material action bar) ─────────
+    // Counter-scaled so toolbar stays crisp regardless of widget scaleFactor
+    Item {
+        id: editToolbar
+        z: 200
+        visible: opacity > 0
+        opacity: GlobalStates.widgetEditMode ? 1 : 0
+        anchors {
+            horizontalCenter: parent.horizontalCenter
+            bottom: parent.top
+            bottomMargin: 8 / root.scaleFactor
+        }
+        width: toolbarRow.implicitWidth + 12
+        height: 36
+        transform: Scale {
+            origin.x: editToolbar.width / 2
+            origin.y: editToolbar.height / 2
+            xScale: 1.0 / root.scaleFactor
+            yScale: 1.0 / root.scaleFactor
+        }
+
+        Behavior on opacity {
+            enabled: Appearance.animationsEnabled
+            NumberAnimation {
+                duration: Appearance.animation.elementMoveFast.duration
+                easing.type: Appearance.animation.elementMoveFast.type
+                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+            }
+        }
+
+        // Prevent drag from starting on toolbar clicks
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            propagateComposedEvents: false
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: Appearance.colors.colLayer2
+            border { width: 1; color: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12) }
+        }
+
+        Row {
+            id: toolbarRow
+            anchors.centerIn: parent
+            spacing: 2
+
+            RippleButton {
+                id: snapZoneBtn
+                width: 32; height: 32
+                buttonRadius: Appearance.rounding.full
+                colBackground: "transparent"
+                colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                downAction: () => { root._cycleSnapZone() }
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "grid_view"
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer2
+                }
+                StyledToolTip { text: Translation.tr("Snap to zone") }
+            }
+
+            RippleButton {
+                id: resetBtn
+                width: 32; height: 32
+                buttonRadius: Appearance.rounding.full
+                colBackground: "transparent"
+                colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                downAction: () => { root.resetToDefaults() }
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "restart_alt"
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer2
+                }
+                StyledToolTip { text: Translation.tr("Reset to defaults") }
+            }
+
+            Rectangle {
+                width: 1; height: 20
+                anchors.verticalCenter: parent.verticalCenter
+                color: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.15)
+            }
+
+            RippleButton {
+                id: popoverBtn
+                visible: root.editPopoverContent !== null
+                width: 32; height: 32
+                buttonRadius: Appearance.rounding.full
+                toggled: editPopoverPanel.visible
+                colBackground: "transparent"
+                colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                colBackgroundToggled: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16)
+                colBackgroundToggledHover: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
+                colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                downAction: () => { editPopoverPanel.visible = !editPopoverPanel.visible }
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "tune"
+                    iconSize: 18
+                    color: popoverBtn.toggled ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer2
+                }
+                StyledToolTip { text: Translation.tr("Quick controls") }
+            }
+
+            RippleButton {
+                id: settingsBtn
+                width: 32; height: 32
+                buttonRadius: Appearance.rounding.full
+                colBackground: "transparent"
+                colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                downAction: () => { GlobalStates.settingsOverlayOpen = true }
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "settings"
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer2
+                }
+                StyledToolTip { text: Translation.tr("Widget settings") }
+            }
+        }
+
+        // Inline popover panel (appears below the toolbar)
+        Item {
+            id: editPopoverPanel
+            visible: false
+            anchors {
+                top: toolbarRow.bottom
+                topMargin: 6
+                horizontalCenter: toolbarRow.horizontalCenter
+            }
+            width: popoverLoader.item ? popoverLoader.item.implicitWidth + 16 : 200
+            height: popoverLoader.item ? popoverLoader.item.implicitHeight + 16 : 0
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+                propagateComposedEvents: false
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: Appearance.rounding.small
+                color: Appearance.colors.colLayer2
+                border { width: 1; color: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12) }
+            }
+
+            Loader {
+                id: popoverLoader
+                anchors.centerIn: parent
+                sourceComponent: root.editPopoverContent
+                active: editPopoverPanel.visible && root.editPopoverContent !== null
+            }
+        }
+    }
+
+    // ── Edit mode selection outline ──────────────────────────
+    Rectangle {
+        z: 199
+        anchors.fill: parent
+        anchors.margins: -4
+        visible: GlobalStates.widgetEditMode
+        color: "transparent"
+        radius: Appearance.rounding.small + 4
+        border { width: 1.5; color: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.4) }
+    }
+
+    // ── Edit mode resize handles ─────────────────────────────
+    readonly property bool _hasResize: Object.keys(root.resizableAxes).length > 0
+    readonly property bool _resizeVisible: GlobalStates.widgetEditMode && root._hasResize
+
+    // Resize handle component — small draggable square at edges/corners
+    component ResizeHandle: Rectangle {
+        id: rh
+        // Which edges this handle controls
+        property bool resizeLeft: false
+        property bool resizeRight: false
+        property bool resizeTop: false
+        property bool resizeBottom: false
+
+        z: 201
+        visible: root._resizeVisible
+        width: 10; height: 10
+        radius: 3
+        color: Appearance.colors.colPrimary
+        border { width: 1; color: ColorUtils.applyAlpha(Appearance.colors.colOnPrimary, 0.3) }
+        opacity: rhArea.containsMouse || rhArea.pressed ? 1.0 : 0.7
+
+        transform: Scale {
+            origin.x: rh.width / 2
+            origin.y: rh.height / 2
+            xScale: 1.0 / root.scaleFactor
+            yScale: 1.0 / root.scaleFactor
+        }
+
+        // Track drag start state
+        property real _startWidth: 0
+        property real _startHeight: 0
+        property real _startX: 0
+        property real _startY: 0
+
+        MouseArea {
+            id: rhArea
+            anchors.fill: parent
+            anchors.margins: -4
+            hoverEnabled: true
+            cursorShape: {
+                if ((rh.resizeLeft && rh.resizeTop) || (rh.resizeRight && rh.resizeBottom)) return Qt.SizeFDiagCursor;
+                if ((rh.resizeRight && rh.resizeTop) || (rh.resizeLeft && rh.resizeBottom)) return Qt.SizeBDiagCursor;
+                if (rh.resizeLeft || rh.resizeRight) return Qt.SizeHorCursor;
+                if (rh.resizeTop || rh.resizeBottom) return Qt.SizeVerCursor;
+                return Qt.ArrowCursor;
+            }
+            preventStealing: true
+
+            property real _dragStartX: 0
+            property real _dragStartY: 0
+
+            onPressed: (mouse) => {
+                rh._startWidth = root.width;
+                rh._startHeight = root.height;
+                rh._startX = root.x;
+                rh._startY = root.y;
+                rhArea._dragStartX = mouse.x;
+                rhArea._dragStartY = mouse.y;
+            }
+
+            onPositionChanged: (mouse) => {
+                if (!pressed) return;
+                const dx = mouse.x - rhArea._dragStartX;
+                const dy = mouse.y - rhArea._dragStartY;
+                const prefix = "background.widgets." + root.configEntryName;
+                const axes = root.resizableAxes;
+                const isUniform = !!axes.uniform;
+
+                let newW = rh._startWidth;
+                let newH = rh._startHeight;
+                let newX = rh._startX;
+                let newY = rh._startY;
+
+                if (rh.resizeRight) newW = Math.max(root.resizeMinWidth, Math.min(root.resizeMaxWidth, rh._startWidth + dx));
+                if (rh.resizeLeft) {
+                    const dw = Math.max(root.resizeMinWidth, Math.min(root.resizeMaxWidth, rh._startWidth - dx));
+                    newX = rh._startX + (rh._startWidth - dw);
+                    newW = dw;
+                }
+                if (rh.resizeBottom) newH = Math.max(root.resizeMinHeight, Math.min(root.resizeMaxHeight, rh._startHeight + dy));
+                if (rh.resizeTop) {
+                    const dh = Math.max(root.resizeMinHeight, Math.min(root.resizeMaxHeight, rh._startHeight - dy));
+                    newY = rh._startY + (rh._startHeight - dh);
+                    newH = dh;
+                }
+
+                // Uniform: use the larger delta
+                if (isUniform) {
+                    const uniformSize = Math.round(Math.max(newW, newH));
+                    Config.setNestedValue(prefix + "." + axes.uniform, uniformSize);
+                } else {
+                    if (axes.width && (rh.resizeLeft || rh.resizeRight))
+                        Config.setNestedValue(prefix + "." + axes.width, Math.round(newW / root.scaleFactor));
+                    if (axes.height && (rh.resizeTop || rh.resizeBottom))
+                        Config.setNestedValue(prefix + "." + axes.height, Math.round(newH / root.scaleFactor));
+                }
+                // Update position for left/top resizing
+                if (rh.resizeLeft) {
+                    Config.setNestedValue(prefix + ".x", Math.round(newX));
+                    root.x = newX;
+                }
+                if (rh.resizeTop) {
+                    Config.setNestedValue(prefix + ".y", Math.round(newY));
+                    root.y = newY;
+                }
+            }
+        }
+    }
+
+    // Corner handles (4 corners)
+    ResizeHandle {
+        anchors { right: parent.left; bottom: parent.top; margins: -1 }
+        resizeLeft: true; resizeTop: true
+    }
+    ResizeHandle {
+        anchors { left: parent.right; bottom: parent.top; margins: -1 }
+        resizeRight: true; resizeTop: true
+    }
+    ResizeHandle {
+        anchors { right: parent.left; top: parent.bottom; margins: -1 }
+        resizeLeft: true; resizeBottom: true
+    }
+    ResizeHandle {
+        anchors { left: parent.right; top: parent.bottom; margins: -1 }
+        resizeRight: true; resizeBottom: true
+    }
+    // Edge handles (4 midpoints)
+    ResizeHandle {
+        anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.top; bottomMargin: -1 }
+        resizeTop: true
+    }
+    ResizeHandle {
+        anchors { horizontalCenter: parent.horizontalCenter; top: parent.bottom; topMargin: -1 }
+        resizeBottom: true
+    }
+    ResizeHandle {
+        anchors { right: parent.left; verticalCenter: parent.verticalCenter; rightMargin: -1 }
+        resizeLeft: true
+    }
+    ResizeHandle {
+        anchors { left: parent.right; verticalCenter: parent.verticalCenter; leftMargin: -1 }
+        resizeRight: true
+    }
+
     onReleased: {
         if (GlobalStates.screenLocked) return;
-        root.targetX = root._snapToPixel(root.x);
-        root.targetY  = root._snapToPixel(root.y);
-        configEntry.x = root.targetX;
-        configEntry.y = root.targetY ;
+        let newX = root.x;
+        let newY = root.y;
+
+        // In edit mode with zone snap: detect nearest zone
+        if (GlobalStates.widgetEditMode && root._isZonePlacement) {
+            const nearest = root._nearestZone(newX, newY);
+            root.snapToZone(nearest);
+            return;
+        }
+
+        if (root._snapEnabled) {
+            newX = root._snapToGrid(newX);
+            newY = root._snapToGrid(newY);
+        }
+        const finalX = root._snapToPixel(newX);
+        const finalY = root._snapToPixel(newY);
+        root.x = finalX;
+        root.y = finalY;
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".x", finalX);
+        Config.setNestedValue("background.widgets." + root.configEntryName + ".y", finalY);
+        // If dragged from zone to a new position, switch to free
+        if (root._snapZones.indexOf(root.placementStrategy) >= 0) {
+            Config.setNestedValue("background.widgets." + root.configEntryName + ".placementStrategy", "free");
+        }
+    }
+
+    // ── Inline popover for quick controls ─────────────────────
+    // Override in subclasses to provide a per-widget quick-edit panel
+    property Component editPopoverContent: null
+
+    // ── Resize handles system ─────────────────────────────────
+    // Override in subclasses to enable resize in edit mode.
+    // Keys: "width", "height" → config key name for that axis
+    // Or: "uniform" → single config key for aspect-locked resize
+    property var resizableAxes: ({})
+    property int resizeMinWidth: 60
+    property int resizeMinHeight: 40
+    property int resizeMaxWidth: 1200
+    property int resizeMaxHeight: 800
+
+    // Override in subclasses with widget-specific default values
+    property var defaultConfig: ({})
+    function resetToDefaults(): void {
+        const prefix = "background.widgets." + root.configEntryName;
+        const defaults = root.defaultConfig;
+        for (const key in defaults) {
+            Config.setNestedValue(prefix + "." + key, defaults[key]);
+        }
+        syncFreePositionFromConfig();
+        refreshPlacementIfNeeded();
     }
 
     property bool needsColText: false
     property color dominantColor: Appearance.colors.colPrimary
     property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
     property color colText: {
+        // colorMode override: force light/dark text
+        if (root.colorMode === "light") return Qt.rgba(1, 1, 1, 0.92);
+        if (root.colorMode === "dark") return Qt.rgba(0, 0, 0, 0.87);
         const onBlurredLock = (GlobalStates.screenLocked && (Config.options?.lock?.blur?.enable ?? false))
         const baseText = Appearance.colors.colOnLayer0
         const accent = Appearance.colors.colPrimary
-        // Good contrast by default, slightly tinted towards primary
         const adaptive = ColorUtils.mix(baseText, accent, dominantColorIsDark ? 0.30 : 0.15)
         return onBlurredLock ? baseText : adaptive;
     }
@@ -123,6 +630,8 @@ AbstractWidget {
     }
     function refreshPlacementIfNeeded() {
         if (!Config.ready || (root.placementStrategy === "free" && root.needsColText)) return;
+        // Zone placements are purely geometric, no image analysis needed
+        if (root._isZonePlacement) return;
         leastBusyRegionProc.wallpaperPath = root.wallpaperPath;
         leastBusyRegionProc.running = false;
         leastBusyRegionProc.running = true;
@@ -150,13 +659,14 @@ AbstractWidget {
             id: leastBusyRegionOutputCollector
             onStreamFinished: {
                 const output = leastBusyRegionOutputCollector.text;
-                // console.log("[Background] Least busy region output:", output)
                 if (output.length === 0) return;
                 const parsedContent = JSON.parse(output);
                 root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
-                if (root.placementStrategy === "free") return;
-                root.targetX = root._snapToPixel(parsedContent.center_x * root.wallpaperScale - root.width / 2);
-                root.targetY  = root._snapToPixel(parsedContent.center_y * root.wallpaperScale - root.height / 2);
+                if (root.placementStrategy === "free" || root._isZonePlacement) return;
+                // Offset auto-placed widgets so they don't stack on top of each other
+                const offsetPx = root.widgetIndex * 160;
+                root.targetX = root._snapToPixel(parsedContent.center_x * root.wallpaperScale - root.width / 2 + offsetPx);
+                root.targetY = root._snapToPixel(parsedContent.center_y * root.wallpaperScale - root.height / 2 + offsetPx * 0.4);
             }
         }
     }

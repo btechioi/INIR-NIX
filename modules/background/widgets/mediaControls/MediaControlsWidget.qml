@@ -18,10 +18,41 @@ AbstractBackgroundWidget {
     id: root
 
     configEntryName: "mediaControls"
+    defaultConfig: ({
+        placementStrategy: "leastBusy", playerPreset: "full",
+        widgetScale: 100, widgetOpacity: 100, colorMode: "auto", dim: 0,
+        x: 100, y: 100
+    })
 
-    readonly property real widgetWidth: Appearance.sizes.mediaControlsWidth
-    readonly property real widgetHeight: Appearance.sizes.mediaControlsHeight
+    readonly property real widgetWidth: Math.round(Appearance.sizes.mediaControlsWidth * scaleFactor)
+    readonly property real widgetHeight: Math.round(Appearance.sizes.mediaControlsHeight * scaleFactor)
     property real popupRounding: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
+
+    editPopoverContent: Component {
+        Item {
+            implicitWidth: 200
+            implicitHeight: _mediaFlow.implicitHeight
+            Flow {
+                id: _mediaFlow
+                width: parent.width
+                spacing: 4
+                Repeater {
+                    model: [{ label: "Full", value: "full" }, { label: "Compact", value: "compact" }, { label: "Minimal", value: "minimal" }, { label: "Album", value: "albumart" }, { label: "Viz", value: "visualizer" }, { label: "Classic", value: "classic" }]
+                    RippleButton {
+                        required property var modelData
+                        width: 62; height: 28
+                        buttonRadius: Appearance.rounding.small
+                        toggled: root.selectedPreset === modelData.value
+                        colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : "transparent"
+                        colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                        downAction: () => Config.setNestedValue("background.widgets.mediaControls.playerPreset", modelData.value)
+                        contentItem: StyledText { anchors.centerIn: parent; text: modelData.label; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
+                    }
+                }
+            }
+        }
+    }
 
     // Use MprisController.displayPlayers - centralized filtering
     readonly property var meaningfulPlayers: MprisController.displayPlayers
@@ -38,6 +69,13 @@ AbstractBackgroundWidget {
     }
 
     property list<real> visualizerPoints: cavaProcess.points
+
+    // Dim factor (0..1)
+    property real dimFactor: {
+        const v = Config.options?.background?.widgets?.mediaControls?.dim ?? 0;
+        const n = Number(v);
+        return Math.max(0, Math.min(1, Number.isFinite(n) ? n / 100 : 0));
+    }
 
     readonly property point widgetScreenPos: root.mapToItem(null, 0, 0)
     
@@ -90,6 +128,7 @@ AbstractBackgroundWidget {
         id: playerColumnLayout
         anchors.fill: parent
         spacing: -Appearance.sizes.elevationMargin
+        opacity: 1.0 - root.dimFactor * 0.6
 
         Repeater {
             model: ScriptModel {

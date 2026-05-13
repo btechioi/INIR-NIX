@@ -1,0 +1,12 @@
+{
+    "name": "Example Widget",
+    "icon": "widgets",
+    "version": "1.0",
+    "author": "inir",
+    "main": "ExampleWidget.qml",
+    "configKeys": {
+        "message": { "type": "string", "default": "Hello, World!", "label": "Message" }
+    },
+    "resizableAxes": {},
+    "defaultSize": { "width": 200, "height": 60 }
+}

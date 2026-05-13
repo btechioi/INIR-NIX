@@ -20,6 +20,8 @@ import qs.modules.background.widgets.clock
 import qs.modules.background.widgets.mediaControls
 import qs.modules.background.widgets.weather
 import qs.modules.background.widgets.visualizer
+import qs.modules.background.widgets.systemMonitor
+import qs.modules.background.widgets.battery
 import "root:modules/common/functions/parallax.js" as ParallaxMath
 
 Variants {
@@ -29,6 +31,14 @@ Variants {
     // Shared cache for magick identify results across all monitor instances.
     // Avoids re-running the subprocess for previously-seen wallpapers.
     property var _wallpaperSizeCache: ({})
+
+    IpcHandler {
+        target: "background"
+        function toggleEditMode(): string {
+            GlobalStates.widgetEditMode = !GlobalStates.widgetEditMode;
+            return GlobalStates.widgetEditMode ? "edit mode on" : "edit mode off";
+        }
+    }
 
     PanelWindow {
         id: bgRoot
@@ -989,8 +999,8 @@ Variants {
                     { type: "separator" },
                     { text: Translation.tr("Change wallpaper"), iconName: "image", monochromeIcon: true,
                         action: () => { GlobalActions.runLauncher(["wallpaperSelector", "toggle"]) } },
-                    { text: Translation.tr("Screenshot"), iconName: "screenshot_monitor", monochromeIcon: true,
-                        action: () => { GlobalStates.regionSelectorOpen = true } },
+                    { text: Translation.tr("Edit widgets"), iconName: "edit", monochromeIcon: true,
+                        action: () => { GlobalStates.widgetEditMode = !GlobalStates.widgetEditMode } },
                     { type: "separator" },
                     { text: Translation.tr("Reload shell"), iconName: "refresh", monochromeIcon: true,
                         action: () => { Quickshell.execDetached(["/usr/bin/bash", Quickshell.shellPath("scripts/restart-shell.sh")]) } }
@@ -1036,9 +1046,264 @@ Variants {
                     AnchorAnimation { duration: Appearance.animation.elementMove.duration; easing.type: Appearance.animation.elementMove.type; easing.bezierCurve: Appearance.animation.elementMove.bezierCurve }
                 }
 
+                // ── Edit Mode Overlay ─────────────────────────────
+                Item {
+                    id: editGridOverlay
+                    anchors.fill: parent
+                    visible: opacity > 0
+                    opacity: GlobalStates.widgetEditMode ? 1 : 0
+                    z: 100
+
+                    Behavior on opacity {
+                        enabled: Appearance.animationsEnabled
+                        NumberAnimation { duration: Appearance.animation.elementMoveEnter.duration; easing.type: Appearance.animation.elementMoveEnter.type; easing.bezierCurve: Appearance.animation.elementMoveEnter.bezierCurve }
+                    }
+
+                    readonly property int gridSize: Config.options?.background?.widgets?.editGrid?.size ?? 32
+                    readonly property bool gridVisible: Config.options?.background?.widgets?.editGrid?.snap ?? true
+                    readonly property color gridColor: Appearance.angelEverywhere ? Appearance.angel.colPrimary
+                        : Appearance.inirEverywhere ? Appearance.inir.colAccent
+                        : Appearance.auroraEverywhere ? Appearance.m3colors.m3primary
+                        : Appearance.colors.colPrimary
+                    readonly property color crosshairColor: Appearance.angelEverywhere ? Appearance.angel.colTertiary
+                        : Appearance.inirEverywhere ? Appearance.inir.colTertiary
+                        : Appearance.auroraEverywhere ? Appearance.m3colors.m3tertiary
+                        : Appearance.colors.colTertiary
+                    readonly property int zoneMargin: 48
+
+                    // Grid dots at intersections
+                    Canvas {
+                        anchors.fill: parent
+                        visible: editGridOverlay.gridVisible
+                        onPaint: {
+                            const ctx = getContext("2d");
+                            ctx.clearRect(0, 0, width, height);
+                            const gs = editGridOverlay.gridSize;
+                            const dotColor = editGridOverlay.gridColor;
+                            ctx.fillStyle = Qt.rgba(dotColor.r, dotColor.g, dotColor.b, 0.06);
+                            const cols = Math.floor(width / gs) + 1;
+                            const rows = Math.floor(height / gs) + 1;
+                            for (let r = 0; r < rows; ++r) {
+                                for (let c = 0; c < cols; ++c) {
+                                    ctx.beginPath();
+                                    ctx.arc(c * gs, r * gs, 1.2, 0, 2 * Math.PI);
+                                    ctx.fill();
+                                }
+                            }
+                        }
+                        Component.onCompleted: requestPaint()
+                        Connections {
+                            target: editGridOverlay
+                            function onGridSizeChanged() { if (parent?.available) parent.requestPaint() }
+                            function onGridColorChanged() { if (parent?.available) parent.requestPaint() }
+                            function onWidthChanged() { if (parent?.available) parent.requestPaint() }
+                            function onHeightChanged() { if (parent?.available) parent.requestPaint() }
+                        }
+                    }
+
+                    // Center crosshair lines
+                    Rectangle {
+                        x: Math.floor(parent.width / 2)
+                        width: 1; height: parent.height
+                        color: CF.ColorUtils.applyAlpha(editGridOverlay.crosshairColor, 0.12)
+                    }
+                    Rectangle {
+                        y: Math.floor(parent.height / 2)
+                        width: parent.width; height: 1
+                        color: CF.ColorUtils.applyAlpha(editGridOverlay.crosshairColor, 0.12)
+                    }
+
+                    // ── Snap Zone Indicators (3x3 grid) ──────────────
+                    Repeater {
+                        model: [
+                            { zone: "topLeft",      col: 0, row: 0 },
+                            { zone: "topCenter",    col: 1, row: 0 },
+                            { zone: "topRight",     col: 2, row: 0 },
+                            { zone: "centerLeft",   col: 0, row: 1 },
+                            { zone: "center",       col: 1, row: 1 },
+                            { zone: "centerRight",  col: 2, row: 1 },
+                            { zone: "bottomLeft",   col: 0, row: 2 },
+                            { zone: "bottomCenter", col: 1, row: 2 },
+                            { zone: "bottomRight",  col: 2, row: 2 }
+                        ]
+                        delegate: Rectangle {
+                            id: zoneRect
+                            required property var modelData
+                            readonly property int col: modelData.col
+                            readonly property int row: modelData.row
+                            readonly property real zw: (editGridOverlay.width - editGridOverlay.zoneMargin * 2) / 3
+                            readonly property real zh: (editGridOverlay.height - editGridOverlay.zoneMargin * 2) / 3
+
+                            x: editGridOverlay.zoneMargin + col * zw + 4
+                            y: editGridOverlay.zoneMargin + row * zh + 4
+                            width: zw - 8
+                            height: zh - 8
+                            radius: Appearance.rounding.small
+                            color: "transparent"
+                            border {
+                                width: 1
+                                color: CF.ColorUtils.applyAlpha(editGridOverlay.gridColor, 0.15)
+                            }
+
+                            // Zone label
+                            Text {
+                                anchors.centerIn: parent
+                                text: {
+                                    const labels = {
+                                        topLeft: "↖", topCenter: "↑", topRight: "↗",
+                                        centerLeft: "←", center: "⊙", centerRight: "→",
+                                        bottomLeft: "↙", bottomCenter: "↓", bottomRight: "↘"
+                                    };
+                                    return labels[zoneRect.modelData.zone] ?? "";
+                                }
+                                font.pixelSize: 16
+                                color: CF.ColorUtils.applyAlpha(editGridOverlay.gridColor, 0.25)
+                            }
+                        }
+                    }
+
+                    // ── Floating Edit Controls Bar ────────────────────
+                    Rectangle {
+                        id: editControlsBar
+                        anchors {
+                            horizontalCenter: parent.horizontalCenter
+                            bottom: parent.bottom
+                            bottomMargin: 24
+                        }
+                        width: editBarRow.implicitWidth + 24
+                        height: 44
+                        radius: Appearance.rounding.full
+                        color: Appearance.colors.colLayer2
+                        border { width: 1; color: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12) }
+
+                        // Prevent clicks from falling through
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.AllButtons
+                        }
+
+                        Row {
+                            id: editBarRow
+                            anchors.centerIn: parent
+                            spacing: 4
+
+                            // Grid snap toggle
+                            RippleButton {
+                                width: 36; height: 36
+                                buttonRadius: Appearance.rounding.full
+                                toggled: Config.options?.background?.widgets?.editGrid?.snap ?? true
+                                colBackground: "transparent"
+                                colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                                colBackgroundToggled: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16)
+                                colBackgroundToggledHover: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
+                                colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                                downAction: () => {
+                                    const current = Config.options?.background?.widgets?.editGrid?.snap ?? true;
+                                    Config.setNestedValue("background.widgets.editGrid.snap", !current);
+                                }
+                                contentItem: MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "grid_3x3"
+                                    iconSize: 20
+                                    color: parent.toggled ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer2
+                                }
+                                StyledToolTip { text: Translation.tr("Snap to grid") }
+                            }
+
+                            // Separator
+                            Rectangle {
+                                width: 1; height: 24
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                            }
+
+                            // Quick widget toggles
+                            Repeater {
+                                model: [
+                                    { key: "weather", icon: "cloud", label: "Weather" },
+                                    { key: "clock", icon: "schedule", label: "Clock" },
+                                    { key: "mediaControls", icon: "album", label: "Media" },
+                                    { key: "visualizer", icon: "graphic_eq", label: "Visualizer" },
+                                    { key: "systemMonitor", icon: "monitor_heart", label: "System Monitor" },
+                                    { key: "battery", icon: "battery_full", label: "Battery" }
+                                ]
+                                RippleButton {
+                                    required property var modelData
+                                    readonly property bool widgetEnabled: Config.options?.background?.widgets?.[modelData.key]?.enable ?? (modelData.key === "weather" || modelData.key === "clock" || modelData.key === "mediaControls")
+                                    width: 36; height: 36
+                                    buttonRadius: Appearance.rounding.full
+                                    toggled: widgetEnabled
+                                    colBackground: "transparent"
+                                    colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                                    colBackgroundToggled: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16)
+                                    colBackgroundToggledHover: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
+                                    colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                                    downAction: () => Config.setNestedValue("background.widgets." + modelData.key + ".enable", !widgetEnabled)
+                                    contentItem: MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        text: parent.modelData.icon
+                                        iconSize: 18
+                                        color: parent.toggled ? Appearance.colors.colPrimary : CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.5)
+                                    }
+                                    StyledToolTip { text: modelData.label }
+                                }
+                            }
+
+                            // Separator
+                            Rectangle {
+                                width: 1; height: 24
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                            }
+
+                            // Open widget settings
+                            RippleButton {
+                                width: 36; height: 36
+                                buttonRadius: Appearance.rounding.full
+                                colBackground: "transparent"
+                                colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.08)
+                                colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                                downAction: () => { GlobalStates.settingsOverlayOpen = true }
+                                contentItem: MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "settings"
+                                    iconSize: 20
+                                    color: Appearance.colors.colOnLayer2
+                                }
+                                StyledToolTip { text: Translation.tr("Widget settings") }
+                            }
+
+                            // Separator
+                            Rectangle {
+                                width: 1; height: 24
+                                anchors.verticalCenter: parent.verticalCenter
+                                color: CF.ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.12)
+                            }
+
+                            // Exit edit mode
+                            RippleButton {
+                                width: 36; height: 36
+                                buttonRadius: Appearance.rounding.full
+                                colBackground: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                                colBackgroundHover: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.20)
+                                colRipple: CF.ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
+                                downAction: () => { GlobalStates.widgetEditMode = false }
+                                contentItem: MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "check"
+                                    iconSize: 20
+                                    color: Appearance.colors.colPrimary
+                                }
+                                StyledToolTip { text: Translation.tr("Done editing") }
+                            }
+                        }
+                    }
+                }
+
                 FadeLoader {
                     shown: bgRoot.backgroundWidgetsOptions.weather?.enable ?? true
                     sourceComponent: WeatherWidget {
+                        widgetIndex: 0
                         screenWidth: bgRoot.screen.width
                         screenHeight: bgRoot.screen.height
                         scaledScreenWidth: bgRoot.screen.width
@@ -1050,6 +1315,7 @@ Variants {
                 FadeLoader {
                     shown: bgRoot.backgroundWidgetsOptions.clock?.enable ?? true
                     sourceComponent: ClockWidget {
+                        widgetIndex: 1
                         screenWidth: bgRoot.screen.width
                         screenHeight: bgRoot.screen.height
                         scaledScreenWidth: bgRoot.screen.width
@@ -1062,6 +1328,7 @@ Variants {
                 FadeLoader {
                     shown: bgRoot.backgroundWidgetsOptions.mediaControls?.enable ?? true
                     sourceComponent: MediaControlsWidget {
+                        widgetIndex: 2
                         screenWidth: bgRoot.screen.width
                         screenHeight: bgRoot.screen.height
                         scaledScreenWidth: bgRoot.screen.width
@@ -1073,6 +1340,7 @@ Variants {
                 FadeLoader {
                     shown: bgRoot.backgroundWidgetsOptions.visualizer?.enable ?? false
                     sourceComponent: VisualizerWidget {
+                        widgetIndex: 3
                         screenWidth: bgRoot.screen.width
                         screenHeight: bgRoot.screen.height
                         scaledScreenWidth: bgRoot.screen.width
@@ -1080,6 +1348,59 @@ Variants {
                         wallpaperScale: 1
                     }
                 }
+
+                FadeLoader {
+                    shown: bgRoot.backgroundWidgetsOptions.systemMonitor?.enable ?? false
+                    sourceComponent: SystemMonitorWidget {
+                        widgetIndex: 4
+                        screenWidth: bgRoot.screen.width
+                        screenHeight: bgRoot.screen.height
+                        scaledScreenWidth: bgRoot.screen.width
+                        scaledScreenHeight: bgRoot.screen.height
+                        wallpaperScale: 1
+                    }
+                }
+
+                FadeLoader {
+                    shown: (bgRoot.backgroundWidgetsOptions.battery?.enable ?? false) && Battery.available
+                    sourceComponent: BatteryWidget {
+                        widgetIndex: 5
+                        screenWidth: bgRoot.screen.width
+                        screenHeight: bgRoot.screen.height
+                        scaledScreenWidth: bgRoot.screen.width
+                        scaledScreenHeight: bgRoot.screen.height
+                        wallpaperScale: 1
+                    }
+                }
+
+                // Custom user widgets from ~/.config/inir/widgets/
+                Repeater {
+                    model: CustomWidgets.ready ? CustomWidgets.widgets : []
+
+                    Loader {
+                        id: customWidgetLoader
+                        required property var modelData
+                        required property int index
+                        active: Config.options?.background?.widgets?.custom?.[modelData.id]?.enable ?? true
+                        source: modelData.qmlPath
+                        onLoaded: {
+                            if (item) {
+                                item.widgetIndex = 6 + index;
+                                item.screenWidth = bgRoot.screen.width;
+                                item.screenHeight = bgRoot.screen.height;
+                                item.scaledScreenWidth = bgRoot.screen.width;
+                                item.scaledScreenHeight = bgRoot.screen.height;
+                                item.wallpaperScale = 1;
+                            }
+                        }
+                        Connections {
+                            target: bgRoot.screen
+                            function onWidthChanged() { if (customWidgetLoader.item) customWidgetLoader.item.screenWidth = bgRoot.screen.width; }
+                            function onHeightChanged() { if (customWidgetLoader.item) customWidgetLoader.item.screenHeight = bgRoot.screen.height; }
+                        }
+                    }
+                }
+
             }
         }
     }

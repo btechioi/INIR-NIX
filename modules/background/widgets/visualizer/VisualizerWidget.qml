@@ -15,12 +15,31 @@ AbstractBackgroundWidget {
     id: root
 
     configEntryName: "visualizer"
+    defaultConfig: ({ placementStrategy: "free", preset: "default", barCount: 48, barSpacing: 2, barRadius: 2, barMinHeight: 1, contentWidth: 304, contentHeight: 104, dim: 0, widgetScale: 100, widgetOpacity: 100, showBackground: true, showBorder: true, colorMode: "auto", x: 100, y: 100 })
 
-    implicitWidth: 304
-    implicitHeight: 104
+    implicitWidth: Math.round((Config.options?.background?.widgets?.visualizer?.contentWidth ?? 304) * scaleFactor)
+    implicitHeight: Math.round((Config.options?.background?.widgets?.visualizer?.contentHeight ?? 104) * scaleFactor)
 
     visibleWhenLocked: false
     needsColText: true
+    resizableAxes: ({ width: "contentWidth", height: "contentHeight" })
+
+    editPopoverContent: Component {
+        Item {
+            implicitWidth: _vizPopRow.implicitWidth
+            implicitHeight: _vizPopRow.implicitHeight
+            Row {
+                id: _vizPopRow
+                spacing: 8
+                StyledText { text: Translation.tr("Bars"); color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small; anchors.verticalCenter: parent.verticalCenter }
+                StyledSpinBox {
+                    from: 8; to: 128; stepSize: 4
+                    value: Config.options?.background?.widgets?.visualizer?.barCount ?? 48
+                    onValueModified: Config.setNestedValue("background.widgets.visualizer.barCount", value)
+                }
+            }
+        }
+    }
 
     readonly property bool _active: Config.options?.background?.widgets?.visualizer?.enable ?? false
 
@@ -55,10 +74,10 @@ AbstractBackgroundWidget {
         anchors.centerIn: parent
         width: parent.width
         height: parent.height
-        radius: root.cardRadius
-        color: ColorUtils.applyAlpha(root.colText, 0.06)
-        border { width: 1; color: ColorUtils.applyAlpha(root.colText, 0.08) }
-        visible: Appearance.inirEverywhere || Appearance.angelEverywhere
+        radius: root.cornerRadiusOverride >= 0 ? root.cornerRadiusOverride : root.cardRadius
+        color: root.backgroundOpacity > 0 ? ColorUtils.applyAlpha(root.colText, root.backgroundOpacity) : "transparent"
+        border { width: root.borderWidth; color: ColorUtils.applyAlpha(root.colText, root.borderOpacity) }
+        visible: root.backgroundOpacity > 0 || root.borderWidth > 0
     }
 
     // ── Visualizer bars ────────────────────────────────────────
@@ -67,10 +86,10 @@ AbstractBackgroundWidget {
         anchors.margins: Appearance.angelEverywhere || Appearance.inirEverywhere ? 4 : 0
         points: cavaProcess.points
         live: root._active
-        barCount: 48
-        barSpacing: 2
-        barMinHeight: 1
-        barRadius: 2
+        barCount: Config.options?.background?.widgets?.visualizer?.barCount ?? 48
+        barSpacing: Config.options?.background?.widgets?.visualizer?.barSpacing ?? 2
+        barMinHeight: Config.options?.background?.widgets?.visualizer?.barMinHeight ?? 1
+        barRadius: Config.options?.background?.widgets?.visualizer?.barRadius ?? 2
         // Multi-color visualizer: low freq = secondary, mid = primary, high = tertiary
         colorLow: Appearance.angelEverywhere ? Appearance.angel.colSecondaryContainer
             : Appearance.inirEverywhere ? Appearance.inir.colSecondaryContainer
