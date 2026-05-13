@@ -20,7 +20,7 @@ Singleton {
     function flushWrites(): void {
         fileWriteTimer.stop();
         fileReloadTimer.stop();
-        root._pendingCustomInject = Object.keys(root.customWidgetData).length > 0;
+        root._prepareCustomInject();
         root._writeInFlight = true;
         configFileView.writeAdapter();
         // onSaved handles _injectCustomDataSync for custom data
@@ -42,22 +42,43 @@ Singleton {
             return;
         }
 
+        let convertedValue = value;
+        if (typeof value === "string") {
+            let trimmed = value.trim();
+            if (trimmed === "true" || trimmed === "false" || !isNaN(Number(trimmed))) {
+                try {
+                    convertedValue = JSON.parse(trimmed);
+                } catch (e) {
+                    convertedValue = value;
+                }
+            }
+        }
+
         // Route custom widget paths to standalone property (outside adapter)
         if (keys.length >= 3 && keys[0] === "background" && keys[1] === "widgets" && keys[2] === "custom") {
             const subKeys = keys.slice(3);
             if (subKeys.length === 0) {
-                root.customWidgetData = (typeof value === "object" && value !== null) ? value : {};
+                root.customWidgetData = (typeof convertedValue === "object" && convertedValue !== null) ? convertedValue : {};
+                root._customSnapshotForInject = root._cloneObject(root.customWidgetData);
+                root._pendingCustomInject = root._hasObjectKeys(root._customSnapshotForInject);
                 return;
             }
-            let obj = root.customWidgetData;
+            let data = {};
+            try {
+                data = JSON.parse(JSON.stringify(root.customWidgetData ?? {}));
+            } catch (e) {
+                data = {};
+            }
+            let obj = data;
             for (let i = 0; i < subKeys.length - 1; ++i) {
                 if (!obj[subKeys[i]] || typeof obj[subKeys[i]] !== "object")
                     obj[subKeys[i]] = {};
                 obj = obj[subKeys[i]];
             }
-            obj[subKeys[subKeys.length - 1]] = value;
-            // Defer to avoid binding loops (signal fires during onCheckedChanged)
-            Qt.callLater(root.customWidgetDataChanged);
+            obj[subKeys[subKeys.length - 1]] = convertedValue;
+            root.customWidgetData = data;
+            root._customSnapshotForInject = root._cloneObject(data);
+            root._pendingCustomInject = root._hasObjectKeys(root._customSnapshotForInject);
             return;
         }
 
@@ -69,19 +90,6 @@ Singleton {
                 obj[keys[i]] = {};
             }
             obj = obj[keys[i]];
-        }
-
-        // Convert value to correct type using JSON.parse when safe
-        let convertedValue = value;
-        if (typeof value === "string") {
-            let trimmed = value.trim();
-            if (trimmed === "true" || trimmed === "false" || !isNaN(Number(trimmed))) {
-                try {
-                    convertedValue = JSON.parse(trimmed);
-                } catch (e) {
-                    convertedValue = value;
-                }
-            }
         }
 
         obj[keys[keys.length - 1]] = convertedValue;
@@ -125,9 +133,44 @@ Singleton {
     property bool _writeInFlight: false
     property bool _pendingCustomInject: false
     property bool _pendingReload: false
+    property var _customSnapshotForInject: ({})
+
+    function _cloneObject(obj: var): var {
+        try {
+            return JSON.parse(JSON.stringify(obj ?? {}));
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function _hasObjectKeys(obj: var): bool {
+        return obj && typeof obj === "object" && Object.keys(obj).length > 0;
+    }
+
+    function _customDataForWrite(): var {
+        if (root._hasObjectKeys(root.customWidgetData))
+            return root._cloneObject(root.customWidgetData);
+        try {
+            rawConfigReader.reload();
+            const raw = JSON.parse(rawConfigReader.text());
+            const diskCustom = raw?.background?.widgets?.custom ?? {};
+            if (root._hasObjectKeys(diskCustom))
+                return root._cloneObject(diskCustom);
+        } catch (e) {}
+        return {};
+    }
+
+    function _prepareCustomInject(): void {
+        root._customSnapshotForInject = root._customDataForWrite();
+        root._pendingCustomInject = root._hasObjectKeys(root._customSnapshotForInject);
+        if (root._pendingCustomInject && !root._hasObjectKeys(root.customWidgetData))
+            root.customWidgetData = root._cloneObject(root._customSnapshotForInject);
+    }
 
     function _injectCustomDataSync(): void {
-        if (Object.keys(root.customWidgetData).length === 0) return;
+        const customData = root._hasObjectKeys(root._customSnapshotForInject)
+            ? root._customSnapshotForInject : root.customWidgetData;
+        if (!root._hasObjectKeys(customData)) return;
         try {
             rawConfigReader.reload();
             const text = rawConfigReader.text();
@@ -135,7 +178,9 @@ Singleton {
             const obj = JSON.parse(text);
             if (!obj.background) obj.background = {};
             if (!obj.background.widgets) obj.background.widgets = {};
-            obj.background.widgets.custom = root.customWidgetData;
+            obj.background.widgets.custom = customData;
+            root.customWidgetData = root._cloneObject(customData);
+            root._customSnapshotForInject = ({});
             root._writeInFlight = true;
             configFileView.setText(JSON.stringify(obj, null, 4));
         } catch (e) { root._writeInFlight = false; }
@@ -160,7 +205,7 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
-            root._pendingCustomInject = Object.keys(root.customWidgetData).length > 0;
+            root._prepareCustomInject();
             root._writeInFlight = true;
             fileReloadTimer.stop();
             configFileView.writeAdapter();

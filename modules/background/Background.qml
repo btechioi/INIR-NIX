@@ -1053,7 +1053,7 @@ Scope {
                     anchors.fill: parent
                     visible: opacity > 0
                     opacity: GlobalStates.widgetEditMode ? 1 : 0
-                    z: 100
+                    z: -1
 
                     Behavior on opacity {
                         enabled: Appearance.animationsEnabled
@@ -1161,6 +1161,19 @@ Scope {
                                 color: CF.ColorUtils.applyAlpha(editGridOverlay.gridColor, 0.25)
                             }
                         }
+                    }
+                }
+
+                Item {
+                    id: editControlsOverlay
+                    anchors.fill: parent
+                    visible: opacity > 0
+                    opacity: GlobalStates.widgetEditMode ? 1 : 0
+                    z: 200
+
+                    Behavior on opacity {
+                        enabled: Appearance.animationsEnabled
+                        NumberAnimation { duration: Appearance.animation.elementMoveEnter.duration; easing.type: Appearance.animation.elementMoveEnter.type; easing.bezierCurve: Appearance.animation.elementMoveEnter.bezierCurve }
                     }
 
                     // ── Floating Edit Controls Bar ────────────────────
@@ -1343,7 +1356,6 @@ Scope {
                         }
                         sourceComponent: WidgetManagerPanel {}
                     }
-
                 }
 
                 FadeLoader {
@@ -1461,8 +1473,16 @@ Scope {
 
                         Connections {
                             target: bgRoot.screen
-                            function onWidthChanged() { if (customWidgetLoader.item) customWidgetLoader.item.screenWidth = bgRoot.screen.width; }
-                            function onHeightChanged() { if (customWidgetLoader.item) customWidgetLoader.item.screenHeight = bgRoot.screen.height; }
+                            function onWidthChanged() {
+                                if (!customWidgetLoader.item) return;
+                                customWidgetLoader.item.screenWidth = bgRoot.screen.width;
+                                customWidgetLoader.item.scaledScreenWidth = bgRoot.screen.width;
+                            }
+                            function onHeightChanged() {
+                                if (!customWidgetLoader.item) return;
+                                customWidgetLoader.item.screenHeight = bgRoot.screen.height;
+                                customWidgetLoader.item.scaledScreenHeight = bgRoot.screen.height;
+                            }
                         }
                     }
                 }

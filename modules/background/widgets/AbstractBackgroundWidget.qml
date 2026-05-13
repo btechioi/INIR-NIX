@@ -75,7 +75,7 @@ AbstractWidget {
     }
     readonly property real cornerRadiusOverride: configEntry?.cornerRadius ?? -1
     readonly property string colorMode: configEntry?.colorMode ?? "auto"
-    property string placementStrategy: configEntry.placementStrategy ?? "free"
+    property string placementStrategy: configEntry?.placementStrategy ?? "free"
 
     // ── Snap zones ────────────────────────────────────────────
     // 9 screen regions for quick widget placement
@@ -125,9 +125,16 @@ AbstractWidget {
         const pos = root._getZonePosition(zone);
         const finalX = root._snapToPixel(pos.x);
         const finalY = root._snapToPixel(pos.y);
-        Config.setNestedValue("background.widgets." + root.configEntryName + ".placementStrategy", zone);
-        Config.setNestedValue("background.widgets." + root.configEntryName + ".x", finalX);
-        Config.setNestedValue("background.widgets." + root.configEntryName + ".y", finalY);
+        const prefix = "background.widgets." + root.configEntryName;
+        let updates = {};
+        if (root.placementStrategy !== zone)
+            updates[prefix + ".placementStrategy"] = zone;
+        if (Number(root.configEntry?.x) !== finalX)
+            updates[prefix + ".x"] = finalX;
+        if (Number(root.configEntry?.y) !== finalY)
+            updates[prefix + ".y"] = finalY;
+        if (Object.keys(updates).length > 0)
+            Config.setNestedValues(updates);
     }
 
     // Detect which zone a position is closest to (for drag-to-snap)
@@ -156,6 +163,17 @@ AbstractWidget {
     // Auto-placement results from image analysis (leastBusy/mostBusy)
     property real _autoPlaceX: 0
     property real _autoPlaceY: 0
+    readonly property bool _isAutoPlacement: root.placementStrategy === "leastBusy" || root.placementStrategy === "mostBusy"
+
+    function _clampX(value: real): real {
+        const maxX = Math.max(0, root.scaledScreenWidth - root.width);
+        return root._snapToPixel(Math.max(0, Math.min(Number(value) || 0, maxX)));
+    }
+
+    function _clampY(value: real): real {
+        const maxY = Math.max(0, root.scaledScreenHeight - root.height);
+        return root._snapToPixel(Math.max(0, Math.min(Number(value) || 0, maxY)));
+    }
 
     // Target position — zones read stored config, free clamps to screen
     property real targetX: {
@@ -166,10 +184,9 @@ AbstractWidget {
         if (root.placementStrategy === "free") {
             const rawX = Number(configEntry?.x ?? 0);
             const safeX = Number.isFinite(rawX) ? rawX : 0;
-            const maxX = Math.max(0, scaledScreenWidth - width);
-            return _snapToPixel(Math.max(0, Math.min(safeX, maxX)));
+            return root._clampX(safeX);
         }
-        return _snapToPixel(root._autoPlaceX);
+        return root._clampX(root._autoPlaceX);
     }
     property real targetY: {
         if (root._isZonePlacement) {
@@ -179,10 +196,9 @@ AbstractWidget {
         if (root.placementStrategy === "free") {
             const rawY = Number(configEntry?.y ?? 0);
             const safeY = Number.isFinite(rawY) ? rawY : 0;
-            const maxY = Math.max(0, scaledScreenHeight - height);
-            return _snapToPixel(Math.max(0, Math.min(safeY, maxY)));
+            return root._clampY(safeY);
         }
-        return _snapToPixel(root._autoPlaceY);
+        return root._clampY(root._autoPlaceY);
     }
 
     // Auto-position when NOT free and NOT actively being dragged in edit mode
@@ -218,7 +234,7 @@ AbstractWidget {
 
     // In edit mode, allow dragging regardless of strategy (user can reposition freely)
     readonly property bool _isZonePlacement: root._snapZones.indexOf(root.placementStrategy) >= 0
-    draggable: (placementStrategy === "free" || (GlobalStates.widgetEditMode && _isZonePlacement)) && !GlobalStates.screenLocked
+    draggable: (placementStrategy === "free" || GlobalStates.widgetEditMode) && !GlobalStates.screenLocked
     function syncFreePositionFromConfig(): void {
         if (!Config.ready) return;
         if (root.placementStrategy !== "free") return;
@@ -535,6 +551,10 @@ AbstractWidget {
 
             onReleased: {
                 root._isResizing = false;
+                if (root._isZonePlacement)
+                    root.snapToZone(root.placementStrategy);
+                else if (root._isAutoPlacement)
+                    root.refreshPlacementIfNeeded();
             }
         }
     }
@@ -594,12 +614,13 @@ AbstractWidget {
         const finalY = root._snapToPixel(newY);
         root.x = finalX;
         root.y = finalY;
-        Config.setNestedValue("background.widgets." + root.configEntryName + ".x", finalX);
-        Config.setNestedValue("background.widgets." + root.configEntryName + ".y", finalY);
-        // If dragged from zone to a new position, switch to free
-        if (root._snapZones.indexOf(root.placementStrategy) >= 0) {
-            Config.setNestedValue("background.widgets." + root.configEntryName + ".placementStrategy", "free");
-        }
+        const prefix = "background.widgets." + root.configEntryName;
+        let updates = {};
+        updates[prefix + ".x"] = finalX;
+        updates[prefix + ".y"] = finalY;
+        if (root.placementStrategy !== "free")
+            updates[prefix + ".placementStrategy"] = "free";
+        Config.setNestedValues(updates);
     }
 
     // ── Inline popover for quick controls ─────────────────────
@@ -654,10 +675,14 @@ AbstractWidget {
     function _seedDefaultsIfNeeded(): void {
         if (!Config.ready) return;
         if (Object.keys(root.defaultConfig).length === 0) return;
-        if (Object.keys(root.configEntry).length > 0) return;
         const prefix = "background.widgets." + root.configEntryName;
-        for (const key in root.defaultConfig)
-            Config.setNestedValue(prefix + "." + key, root.defaultConfig[key]);
+        let updates = {};
+        for (const key in root.defaultConfig) {
+            if (root._readConfigKey(key) === undefined)
+                updates[prefix + "." + key] = root.defaultConfig[key];
+        }
+        if (Object.keys(updates).length > 0)
+            Config.setNestedValues(updates);
     }
     Component.onCompleted: _seedDefaultsIfNeeded()
     function resetToDefaults(): void {
@@ -702,10 +727,24 @@ AbstractWidget {
     // Re-snap zone positions when screen size changes
     onScaledScreenWidthChanged: if (root._isZonePlacement) _zoneResnapDebounce.restart()
     onScaledScreenHeightChanged: if (root._isZonePlacement) _zoneResnapDebounce.restart()
+    onWidthChanged: _geometryPlacementDebounce.restart()
+    onHeightChanged: _geometryPlacementDebounce.restart()
     Timer {
         id: _zoneResnapDebounce
         interval: 100; repeat: false
         onTriggered: root.snapToZone(root.placementStrategy)
+    }
+    Timer {
+        id: _geometryPlacementDebounce
+        interval: 120; repeat: false
+        onTriggered: {
+            if (!Config.ready || root.containsPress || root._isResizing)
+                return;
+            if (root._isZonePlacement)
+                root.snapToZone(root.placementStrategy);
+            else if (root._isAutoPlacement)
+                root.refreshPlacementIfNeeded();
+        }
     }
     Connections {
         target: Config
@@ -737,10 +776,10 @@ AbstractWidget {
         id: leastBusyRegionProc
         property string wallpaperPath: root.wallpaperPath
         // TODO: make these less arbitrary
-        property int contentWidth: 300
-        property int contentHeight: 300
-        property int horizontalPadding: 200
-        property int verticalPadding: 200
+        property int contentWidth: Math.max(1, Math.round(root.width / Math.max(root.wallpaperScale, 0.001)))
+        property int contentHeight: Math.max(1, Math.round(root.height / Math.max(root.wallpaperScale, 0.001)))
+        property int horizontalPadding: root._zoneMargin
+        property int verticalPadding: root._zoneMargin
         command: [Quickshell.shellPath("scripts/images/least-busy-region-venv.sh") // Comments to force the formatter to break lines
             , "--screen-width", Math.round(root.scaledScreenWidth) //
             , "--screen-height", Math.round(root.scaledScreenHeight) //
@@ -757,12 +796,15 @@ AbstractWidget {
             onStreamFinished: {
                 const output = leastBusyRegionOutputCollector.text;
                 if (output.length === 0) return;
-                const parsedContent = JSON.parse(output);
-                root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
-                if (root.placementStrategy === "free" || root._isZonePlacement) return;
-                const offsetPx = root.widgetIndex * 160;
-                root._autoPlaceX = parsedContent.center_x * root.wallpaperScale - root.width / 2 + offsetPx;
-                root._autoPlaceY = parsedContent.center_y * root.wallpaperScale - root.height / 2 + offsetPx * 0.4;
+                try {
+                    const parsedContent = JSON.parse(output);
+                    root.dominantColor = parsedContent.dominant_color || Appearance.colors.colPrimary;
+                    if (!root._isAutoPlacement) return;
+                    root._autoPlaceX = root._clampX(parsedContent.center_x * root.wallpaperScale - root.width / 2);
+                    root._autoPlaceY = root._clampY(parsedContent.center_y * root.wallpaperScale - root.height / 2);
+                } catch (e) {
+                    console.warn("[Widgets] Failed to parse placement output:", e);
+                }
             }
         }
     }

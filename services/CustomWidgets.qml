@@ -18,6 +18,12 @@ Singleton {
     property bool _scanDone: false
 
     Component.onCompleted: _scan()
+    Connections {
+        target: Config
+        function onReadyChanged() {
+            root._seedMissingConfig();
+        }
+    }
 
     function reload(): void {
         root._scanDone = false;
@@ -89,6 +95,7 @@ Singleton {
                     configKeys: m.configKeys || {},
                     resizableAxes: m.resizableAxes || {},
                     defaultSize: m.defaultSize || { width: 200, height: 100 },
+                    defaultConfig: m.defaultConfig || {},
                     valid: warnings.length === 0,
                     warnings: warnings
                 });
@@ -98,6 +105,72 @@ Singleton {
             console.warn("[CustomWidgets] Failed to parse manifests:", e);
         }
         root._scanDone = true;
+        root._seedMissingConfig();
+    }
+
+    function _readCustomConfig(widgetId: string, key: string): var {
+        const parts = key.split(".");
+        let obj = Config.customWidgetData?.[widgetId];
+        for (let i = 0; i < parts.length; i++) {
+            if (obj == null) return undefined;
+            obj = obj[parts[i]];
+        }
+        return obj;
+    }
+
+    function _defaultForSpec(spec: var): var {
+        if (spec && spec.default !== undefined)
+            return spec.default;
+        const type = spec?.type ?? "bool";
+        if (type === "bool") return false;
+        if (type === "string") return (spec?.options && spec.options.length > 0) ? spec.options[0] : "";
+        return 0;
+    }
+
+    function _widgetDefaults(widget: var, index: int): var {
+        let defaults = {
+            enable: true,
+            placementStrategy: "free",
+            x: 240 + index * 36,
+            y: 240 + index * 28,
+            widgetScale: 100,
+            widgetOpacity: 100,
+            colorMode: "auto",
+            dim: 0,
+            backgroundOpacity: 0.06,
+            borderWidth: 1,
+            borderOpacity: 0.08,
+            cornerRadius: -1
+        };
+        const axes = widget.resizableAxes || {};
+        const size = widget.defaultSize || {};
+        if (axes.width && size.width !== undefined) defaults[axes.width] = size.width;
+        if (axes.height && size.height !== undefined) defaults[axes.height] = size.height;
+        if (axes.uniform && axes.uniform !== "widgetScale" && size.width !== undefined)
+            defaults[axes.uniform] = size.width;
+        const extraDefaults = widget.defaultConfig || {};
+        for (const key in extraDefaults)
+            defaults[key] = extraDefaults[key];
+        const configKeys = widget.configKeys || {};
+        for (const key in configKeys)
+            defaults[key] = root._defaultForSpec(configKeys[key]);
+        return defaults;
+    }
+
+    function _seedMissingConfig(): void {
+        if (!Config.ready || !root._scanDone || root.widgets.length === 0)
+            return;
+        let updates = {};
+        for (let i = 0; i < root.widgets.length; i++) {
+            const widget = root.widgets[i];
+            const defaults = root._widgetDefaults(widget, i);
+            for (const key in defaults) {
+                if (root._readCustomConfig(widget.id, key) === undefined)
+                    updates["background.widgets.custom." + widget.id + "." + key] = defaults[key];
+            }
+        }
+        if (Object.keys(updates).length > 0)
+            Config.setNestedValues(updates);
     }
 
     // Get a custom widget's config value (freeform namespace)

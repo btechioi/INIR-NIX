@@ -1811,8 +1811,9 @@ ContentPage {
                         Layout.fillWidth: false
                         buttonIcon: cwDelegate.modelData.icon || "widgets"
                         text: cwDelegate.modelData.name
-                        checked: Config.customWidgetData?.[cwDelegate.modelData.id]?.enable ?? true
-                        onCheckedChanged: Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", checked)
+                        readonly property bool currentEnabled: Config.customWidgetData?.[cwDelegate.modelData.id]?.enable ?? true
+                        checked: currentEnabled
+                        onCheckedChanged: if (checked !== currentEnabled) Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", checked)
                     }
                     Item { Layout.fillWidth: true }
                     WidgetPlacementSelector {
@@ -1825,6 +1826,100 @@ ContentPage {
                 WidgetZonePicker {
                     configPath: "background.widgets.custom." + cwDelegate.modelData.id
                     configEntry: Config.customWidgetData?.[cwDelegate.modelData.id]
+                }
+
+                ContentSubsection {
+                    title: Translation.tr("Position")
+
+                    ConfigRow {
+                        Layout.fillWidth: true
+                        StyledText {
+                            text: Translation.tr("Coordinates")
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        Item { Layout.fillWidth: true }
+                        Row {
+                            spacing: 8
+                            StyledSpinBox {
+                                from: 0; to: 10000; stepSize: Config.options?.background?.widgets?.editGrid?.size ?? 32
+                                value: Config.customWidgetData?.[cwDelegate.modelData.id]?.x ?? (240 + cwDelegate.index * 36)
+                                onValueModified: Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".x", value)
+                                StyledToolTip { text: Translation.tr("X position") }
+                            }
+                            StyledSpinBox {
+                                from: 0; to: 10000; stepSize: Config.options?.background?.widgets?.editGrid?.size ?? 32
+                                value: Config.customWidgetData?.[cwDelegate.modelData.id]?.y ?? (240 + cwDelegate.index * 28)
+                                onValueModified: Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".y", value)
+                                StyledToolTip { text: Translation.tr("Y position") }
+                            }
+                        }
+                    }
+
+                    ConfigRow {
+                        Layout.fillWidth: true
+                        StyledText {
+                            text: Translation.tr("Desktop editing")
+                            color: Appearance.colors.colOnLayer1
+                        }
+                        Item { Layout.fillWidth: true }
+                        RippleButton {
+                            width: implicitWidth; height: 32
+                            buttonRadius: Appearance.rounding.full
+                            colBackground: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
+                            colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.20)
+                            colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
+                            downAction: () => {
+                                Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", true);
+                                GlobalStates.widgetEditMode = true;
+                            }
+                            contentItem: Row {
+                                anchors.centerIn: parent; spacing: 6; leftPadding: 14; rightPadding: 14
+                                MaterialSymbol { text: "drag_pan"; iconSize: 16; color: Appearance.colors.colPrimary; anchors.verticalCenter: parent.verticalCenter }
+                                StyledText { text: Translation.tr("Edit on desktop"); color: Appearance.colors.colPrimary; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
+                            }
+                        }
+                    }
+                }
+
+                ContentSubsection {
+                    visible: Object.keys(cwDelegate.modelData.resizableAxes || {}).length > 0
+                    title: Translation.tr("Size")
+
+                    ConfigRow {
+                        visible: (cwDelegate.modelData.resizableAxes || {}).width !== undefined
+                        Layout.fillWidth: true
+                        StyledText { text: Translation.tr("Width"); color: Appearance.colors.colOnLayer1 }
+                        Item { Layout.fillWidth: true }
+                        StyledSpinBox {
+                            from: 40; to: 2000; stepSize: 10
+                            value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).width ?? "contentWidth", cwDelegate.modelData.defaultSize?.width ?? 200)
+                            onValueModified: CustomWidgets.setConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).width ?? "contentWidth", value)
+                        }
+                    }
+
+                    ConfigRow {
+                        visible: (cwDelegate.modelData.resizableAxes || {}).height !== undefined
+                        Layout.fillWidth: true
+                        StyledText { text: Translation.tr("Height"); color: Appearance.colors.colOnLayer1 }
+                        Item { Layout.fillWidth: true }
+                        StyledSpinBox {
+                            from: 30; to: 1200; stepSize: 10
+                            value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).height ?? "contentHeight", cwDelegate.modelData.defaultSize?.height ?? 100)
+                            onValueModified: CustomWidgets.setConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).height ?? "contentHeight", value)
+                        }
+                    }
+
+                    ConfigRow {
+                        visible: (cwDelegate.modelData.resizableAxes || {}).uniform !== undefined && (cwDelegate.modelData.resizableAxes || {}).uniform !== "widgetScale"
+                        Layout.fillWidth: true
+                        StyledText { text: Translation.tr("Size"); color: Appearance.colors.colOnLayer1 }
+                        Item { Layout.fillWidth: true }
+                        StyledSpinBox {
+                            from: 30; to: 2000; stepSize: 10
+                            value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).uniform ?? "size", cwDelegate.modelData.defaultSize?.width ?? 200)
+                            onValueModified: CustomWidgets.setConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).uniform ?? "size", value)
+                        }
+                    }
                 }
 
                 // Meta row: version, author, actions
@@ -1894,8 +1989,9 @@ ContentPage {
 
                             StyledSwitch {
                                 visible: modelData.spec.type === "bool"
-                                checked: CustomWidgets.getConfigValue(modelData.widgetId, modelData.key, modelData.spec.default ?? false)
-                                onCheckedChanged: CustomWidgets.setConfigValue(modelData.widgetId, modelData.key, checked)
+                                readonly property bool currentChecked: CustomWidgets.getConfigValue(modelData.widgetId, modelData.key, modelData.spec.default ?? false)
+                                checked: currentChecked
+                                onCheckedChanged: if (checked !== currentChecked) CustomWidgets.setConfigValue(modelData.widgetId, modelData.key, checked)
                             }
                             StyledSpinBox {
                                 visible: modelData.spec.type === "int"
@@ -1929,6 +2025,7 @@ ContentPage {
                 WidgetAppearanceControls {
                     configPath: "background.widgets.custom." + cwDelegate.modelData.id
                     configEntry: Config.customWidgetData?.[cwDelegate.modelData.id]
+                    hasCardControls: true
                 }
             }
         }
