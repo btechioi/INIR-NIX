@@ -51,6 +51,24 @@ ContentPage {
         ]
     }
 
+    function _manifestOptions(options: var): var {
+        if (!options || !Array.isArray(options)) return [];
+        return options.map(o => {
+            if (o && typeof o === "object")
+                return { displayName: o.label ?? o.displayName ?? o.value ?? "", value: o.value ?? o.label ?? o.displayName ?? "" };
+            return { displayName: String(o), value: o };
+        });
+    }
+
+    function _customWidgetInstalled(widgetId: string): bool {
+        if (!CustomWidgets.ready) return false;
+        for (let i = 0; i < CustomWidgets.widgets.length; i++) {
+            if (CustomWidgets.widgets[i].id === widgetId)
+                return true;
+        }
+        return false;
+    }
+
     // ── Reusable zone picker (3x3 grid) ────────────────────────
     component WidgetZonePicker: ColumnLayout {
         id: wzp
@@ -108,12 +126,81 @@ ContentPage {
         required property var configEntry
         required property string defaultStrategy
         Layout.fillWidth: false
+        Layout.preferredWidth: Math.min(500, Math.max(420, root.width * 0.5))
+        Layout.minimumWidth: Math.min(420, root.width * 0.5)
 
         readonly property string currentStrategy: Config.getNestedValue(wps.configPath + ".placementStrategy", configEntry?.placementStrategy ?? defaultStrategy)
 
         currentValue: root._resolvedMode(wps.currentStrategy)
         onSelected: newValue => root._applyMode(wps.configPath, newValue, wps.currentStrategy)
         options: root._placementOptions()
+    }
+
+    component WidgetSettingRow: RowLayout {
+        id: wsr
+        property string label: ""
+        property string icon: ""
+        property bool trailing: true
+        default property alias controlData: controlRow.data
+
+        Layout.fillWidth: true
+        spacing: 12
+
+        RowLayout {
+            Layout.preferredWidth: 180
+            Layout.maximumWidth: 220
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 8
+
+            MaterialSymbol {
+                visible: wsr.icon.length > 0
+                text: wsr.icon
+                iconSize: Appearance.font.pixelSize.normal
+                color: Appearance.colors.colSubtext
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: wsr.label
+                color: Appearance.colors.colOnLayer1
+                font.pixelSize: Appearance.font.pixelSize.small
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        RowLayout {
+            id: controlRow
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 8
+
+            Item {
+                visible: wsr.trailing
+                Layout.fillWidth: wsr.trailing
+            }
+        }
+    }
+
+    component WidgetToggleChip: SelectionGroupButton {
+        id: wtc
+        required property string configPath
+        property bool defaultValue: false
+
+        Layout.fillWidth: false
+        leftmost: true; rightmost: true
+        toggled: Boolean(Config.getNestedValue(wtc.configPath, wtc.defaultValue))
+        onClicked: Config.setNestedValue(wtc.configPath, !wtc.toggled)
+    }
+
+    component WidgetStateChip: SelectionGroupButton {
+        id: wsc
+        property bool active: false
+        property var toggleAction
+
+        Layout.fillWidth: false
+        leftmost: true; rightmost: true
+        toggled: wsc.active
+        onClicked: if (wsc.toggleAction) wsc.toggleAction(!wsc.active)
     }
 
     // ── Reusable appearance controls for any widget ──────────
@@ -126,10 +213,8 @@ ContentPage {
         property int dimDefault: 0
         title: Translation.tr("Appearance")
 
-        ConfigRow {
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Scale"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+        WidgetSettingRow {
+            label: Translation.tr("Scale")
             StyledSpinBox {
                 from: 50; to: 200; stepSize: 10
                 value: Config.getNestedValue(wac.configPath + ".widgetScale", wac.configEntry?.widgetScale ?? 100)
@@ -137,10 +222,9 @@ ContentPage {
             }
         }
 
-        ConfigRow {
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Opacity"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+        WidgetSettingRow {
+            label: Translation.tr("Opacity")
+            trailing: false
             StyledSlider {
                 from: 10; to: 100; stepSize: 5
                 value: Config.getNestedValue(wac.configPath + ".widgetOpacity", wac.configEntry?.widgetOpacity ?? 100)
@@ -148,11 +232,10 @@ ContentPage {
             }
         }
 
-        ConfigRow {
+        WidgetSettingRow {
             visible: wac.hasDim
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Dim"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+            label: Translation.tr("Dim")
+            trailing: false
             StyledSlider {
                 from: 0; to: 100; stepSize: 5
                 value: Config.getNestedValue(wac.configPath + ".dim", wac.configEntry?.dim ?? wac.dimDefault)
@@ -160,11 +243,10 @@ ContentPage {
             }
         }
 
-        ConfigRow {
+        WidgetSettingRow {
             visible: wac.hasCardControls
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Background opacity"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+            label: Translation.tr("Background opacity")
+            trailing: false
             StyledSlider {
                 from: 0; to: 100; stepSize: 1
                 value: Math.round(Config.getNestedValue(wac.configPath + ".backgroundOpacity", wac.configEntry?.backgroundOpacity ?? 0.06) * 100)
@@ -172,11 +254,9 @@ ContentPage {
             }
         }
 
-        ConfigRow {
+        WidgetSettingRow {
             visible: wac.hasCardControls
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Border width"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+            label: Translation.tr("Border width")
             StyledSpinBox {
                 from: 0; to: 8; stepSize: 1
                 value: Config.getNestedValue(wac.configPath + ".borderWidth", wac.configEntry?.borderWidth ?? 1)
@@ -184,11 +264,10 @@ ContentPage {
             }
         }
 
-        ConfigRow {
+        WidgetSettingRow {
             visible: wac.hasCardControls
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Border opacity"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+            label: Translation.tr("Border opacity")
+            trailing: false
             StyledSlider {
                 from: 0; to: 100; stepSize: 1
                 value: Math.round(Config.getNestedValue(wac.configPath + ".borderOpacity", wac.configEntry?.borderOpacity ?? 0.08) * 100)
@@ -196,11 +275,9 @@ ContentPage {
             }
         }
 
-        ConfigRow {
+        WidgetSettingRow {
             visible: wac.hasCardControls
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Corner radius"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+            label: Translation.tr("Corner radius")
             StyledSpinBox {
                 from: -1; to: 50; stepSize: 1
                 value: Config.getNestedValue(wac.configPath + ".cornerRadius", wac.configEntry?.cornerRadius ?? -1)
@@ -209,12 +286,10 @@ ContentPage {
             }
         }
 
-        ConfigRow {
-            Layout.fillWidth: true
-            StyledText { text: Translation.tr("Color mode"); color: Appearance.colors.colOnLayer1 }
-            Item { Layout.fillWidth: true }
+        WidgetSettingRow {
+            label: Translation.tr("Color mode")
+            trailing: false
             ConfigSelectionArray {
-                Layout.fillWidth: false
                 currentValue: Config.getNestedValue(wac.configPath + ".colorMode", wac.configEntry?.colorMode ?? "auto")
                 onSelected: newValue => Config.setNestedValue(wac.configPath + ".colorMode", newValue)
                 options: root._colorModeOptions()
@@ -229,33 +304,27 @@ ContentPage {
         title: Translation.tr("Edit Mode")
 
         SettingsGroup {
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("Desktop editing")
+                icon: "edit"
+                trailing: false
+                WidgetStateChip {
                     buttonIcon: "edit"
-                    text: Translation.tr("Edit Mode")
-                    autoToggle: false
-
-                    checked: GlobalStates.widgetEditMode
-                    onToggledByUser: checked => GlobalStates.widgetEditMode = checked
-                    StyledToolTip {
-                        text: Translation.tr("Show alignment grid and enable snap-to-grid for widget placement")
-                    }
+                    buttonText: Translation.tr("Edit mode")
+                    active: GlobalStates.widgetEditMode
+                    toggleAction: checked => GlobalStates.widgetEditMode = checked
+                    StyledToolTip { text: Translation.tr("Show widget handles and desktop placement controls") }
                 }
             }
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("Grid")
+                icon: "grid_3x3"
+                WidgetToggleChip {
+                    configPath: "background.widgets.editGrid.snap"
+                    defaultValue: true
                     buttonIcon: "grid_3x3"
-                    text: Translation.tr("Snap to grid")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.editGrid.snap", true)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.editGrid.snap", checked)
+                    buttonText: Translation.tr("Snap")
                 }
-                Item { Layout.fillWidth: true }
                 StyledSpinBox {
                     from: 8; to: 128; stepSize: 8
                     value: Config.getNestedValue("background.widgets.editGrid.size", 32)
@@ -280,18 +349,16 @@ ContentPage {
 
         SettingsGroup {
             // Enable + placement
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.clock.enable"
+                    defaultValue: true
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.clock.enable", true)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.clock.enable", checked)
+                    buttonText: Translation.tr("Enable")
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.clock"
                     configEntry: Config.getNestedValue("background.widgets.clock", ({}))
@@ -431,10 +498,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Font weight"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Font weight")
                     StyledSpinBox {
                         from: 100; to: 900; stepSize: 100
                         value: Config.getNestedValue("background.widgets.clock.digital.fontWeight", 600)
@@ -442,10 +507,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Spacing"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Spacing")
                     StyledSpinBox {
                         from: 0; to: 20; stepSize: 1
                         value: Config.getNestedValue("background.widgets.clock.digital.spacing", 6)
@@ -453,10 +516,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Time scale"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Time scale")
                     StyledSpinBox {
                         from: 50; to: 200; stepSize: 5
                         value: Config.getNestedValue("background.widgets.clock.timeScale", 100)
@@ -464,10 +525,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Date scale"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Date scale")
                     StyledSpinBox {
                         from: 50; to: 200; stepSize: 5
                         value: Config.getNestedValue("background.widgets.clock.dateScale", 100)
@@ -476,10 +535,18 @@ ContentPage {
                 }
 
                 FontSelector {
+                    id: clockFontSelector
                     label: Translation.tr("Clock font")
                     icon: "font_download"
                     selectedFont: Config.getNestedValue("background.widgets.clock.fontFamily", "Space Grotesk")
-                    onSelectedFontChanged: Config.setNestedValue("background.widgets.clock.fontFamily", selectedFont)
+                    onSelectedFontChanged: {
+                        if (selectedFont !== Config.getNestedValue("background.widgets.clock.fontFamily", "Space Grotesk"))
+                            Config.setNestedValue("background.widgets.clock.fontFamily", selectedFont)
+                    }
+                    Connections {
+                        target: Config.options?.background?.widgets?.clock ?? null
+                        function onFontFamilyChanged() { clockFontSelector.selectedFont = Config.getNestedValue("background.widgets.clock.fontFamily", "Space Grotesk") }
+                    }
                 }
             }
 
@@ -551,10 +618,8 @@ ContentPage {
                 visible: clockSection._clockStyle === "cookie"
                 title: Translation.tr("Cookie clock shape")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Size"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Size")
                     StyledSpinBox {
                         from: 100; to: 400; stepSize: 10
                         value: Config.getNestedValue("background.widgets.clock.cookie.size", 230)
@@ -572,10 +637,8 @@ ContentPage {
                     StyledToolTip { text: Translation.tr("Use smooth sine-wave edges instead of rounded polygon") }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Sides"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Sides")
                     StyledSpinBox {
                         from: 3; to: 30; stepSize: 1
                         value: Config.getNestedValue("background.widgets.clock.cookie.sides", 15)
@@ -636,10 +699,9 @@ ContentPage {
                 visible: clockSection._clockStyle === "cookie"
                 title: Translation.tr("Hand styles")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Hour hand"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Hour hand")
+                    trailing: false
                     ConfigSelectionArray {
                         Layout.fillWidth: false
                         currentValue: Config.getNestedValue("background.widgets.clock.cookie.hourHandStyle", "hollow")
@@ -653,10 +715,9 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Minute hand"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Minute hand")
+                    trailing: false
                     ConfigSelectionArray {
                         Layout.fillWidth: false
                         currentValue: Config.getNestedValue("background.widgets.clock.cookie.minuteHandStyle", "hide")
@@ -670,10 +731,9 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Second hand"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Second hand")
+                    trailing: false
                     ConfigSelectionArray {
                         Layout.fillWidth: false
                         currentValue: Config.getNestedValue("background.widgets.clock.cookie.secondHandStyle", "hide")
@@ -785,18 +845,16 @@ ContentPage {
         title: Translation.tr("Weather")
 
         SettingsGroup {
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.weather.enable"
+                    defaultValue: true
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.weather.enable", true)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.weather.enable", checked)
+                    buttonText: Translation.tr("Enable")
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.weather"
                     configEntry: Config.getNestedValue("background.widgets.weather", ({}))
@@ -889,61 +947,50 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Sizing")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Widget size"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Widget size")
                     StyledSpinBox {
                         from: 80; to: 400; stepSize: 10
                         value: Config.getNestedValue("background.widgets.weather.size", 200)
                         onValueModified: Config.setNestedValue("background.widgets.weather.size", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Temp size"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Temp size")
                     StyledSpinBox {
                         from: 20; to: 200; stepSize: 5
                         value: Config.getNestedValue("background.widgets.weather.tempSize", 80)
                         onValueModified: Config.setNestedValue("background.widgets.weather.tempSize", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Icon size"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Icon size")
                     StyledSpinBox {
                         from: 20; to: 200; stepSize: 5
                         value: Config.getNestedValue("background.widgets.weather.iconSize", 80)
                         onValueModified: Config.setNestedValue("background.widgets.weather.iconSize", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Padding"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Padding")
                     StyledSpinBox {
                         from: 0; to: 60; stepSize: 2
                         value: Config.getNestedValue("background.widgets.weather.padding", 20)
                         onValueModified: Config.setNestedValue("background.widgets.weather.padding", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Temp font weight"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Temp font weight")
                     StyledSpinBox {
                         from: 100; to: 900; stepSize: 100
                         value: Config.getNestedValue("background.widgets.weather.tempFontWeight", 500)
                         onValueModified: Config.setNestedValue("background.widgets.weather.tempFontWeight", value)
                     }
                 }
-                ConfigRow {
+                WidgetSettingRow {
                     visible: Config.getNestedValue("background.widgets.weather.showCondition", false)
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Condition opacity"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Condition opacity")
+                    trailing: false
                     StyledSlider {
                         from: 0; to: 1; stepSize: 0.05
                         value: Config.getNestedValue("background.widgets.weather.conditionOpacity", 0.7)
@@ -991,18 +1038,16 @@ ContentPage {
         title: Translation.tr("Media Controls")
 
         SettingsGroup {
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.mediaControls.enable"
+                    defaultValue: true
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.mediaControls.enable", true)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.mediaControls.enable", checked)
+                    buttonText: Translation.tr("Enable")
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.mediaControls"
                     configEntry: Config.getNestedValue("background.widgets.mediaControls", ({}))
@@ -1063,21 +1108,16 @@ ContentPage {
         title: Translation.tr("Visualizer")
 
         SettingsGroup {
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.visualizer.enable"
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.visualizer.enable", false)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.visualizer.enable", checked)
-                    StyledToolTip {
-                        text: Translation.tr("Audio visualizer widget on the desktop")
-                    }
+                    buttonText: Translation.tr("Enable")
+                    StyledToolTip { text: Translation.tr("Audio visualizer widget on the desktop") }
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.visualizer"
                     configEntry: Config.getNestedValue("background.widgets.visualizer", ({}))
@@ -1140,10 +1180,8 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Bars")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar count"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Bar count")
                     StyledSpinBox {
                         from: 8; to: 128; stepSize: 4
                         value: Config.getNestedValue("background.widgets.visualizer.barCount", 48)
@@ -1151,10 +1189,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar spacing"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Bar spacing")
                     StyledSpinBox {
                         from: 0; to: 8; stepSize: 1
                         value: Config.getNestedValue("background.widgets.visualizer.barSpacing", 2)
@@ -1162,10 +1198,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar radius"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Bar radius")
                     StyledSpinBox {
                         from: 0; to: 16; stepSize: 1
                         value: Config.getNestedValue("background.widgets.visualizer.barRadius", 2)
@@ -1173,10 +1207,8 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Min height"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Min height")
                     StyledSpinBox {
                         from: 0; to: 16; stepSize: 1
                         value: Config.getNestedValue("background.widgets.visualizer.barMinHeight", 1)
@@ -1188,20 +1220,16 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Dimensions")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Width"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Width")
                     StyledSpinBox {
                         from: 100; to: 800; stepSize: 20
                         value: Config.getNestedValue("background.widgets.visualizer.contentWidth", 304)
                         onValueModified: Config.setNestedValue("background.widgets.visualizer.contentWidth", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Height"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Height")
                     StyledSpinBox {
                         from: 40; to: 400; stepSize: 10
                         value: Config.getNestedValue("background.widgets.visualizer.contentHeight", 104)
@@ -1253,21 +1281,16 @@ ContentPage {
         title: Translation.tr("System Monitor")
 
         SettingsGroup {
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.systemMonitor.enable"
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.systemMonitor.enable", false)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.systemMonitor.enable", checked)
-                    StyledToolTip {
-                        text: Translation.tr("Show CPU, RAM, and GPU usage on the desktop")
-                    }
+                    buttonText: Translation.tr("Enable")
+                    StyledToolTip { text: Translation.tr("Show CPU, RAM, and GPU usage on the desktop") }
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.systemMonitor"
                     configEntry: Config.getNestedValue("background.widgets.systemMonitor", ({}))
@@ -1330,64 +1353,56 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Resources")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    SettingsSwitch {
-                        Layout.fillWidth: false
+                WidgetSettingRow {
+                    label: Translation.tr("Meters")
+                    icon: "monitor_heart"
+                    trailing: false
+                    WidgetToggleChip {
+                        configPath: "background.widgets.systemMonitor.showCpu"
+                        defaultValue: true
                         buttonIcon: "memory"
-                        text: Translation.tr("CPU")
-                        autoToggle: false
-
-                        checked: Config.getNestedValue("background.widgets.systemMonitor.showCpu", true)
-                        onToggledByUser: checked => Config.setNestedValue("background.widgets.systemMonitor.showCpu", checked)
+                        buttonText: Translation.tr("CPU")
                     }
-                    SettingsSwitch {
-                        Layout.fillWidth: false
+                    WidgetToggleChip {
+                        configPath: "background.widgets.systemMonitor.showMemory"
+                        defaultValue: true
                         buttonIcon: "storage"
-                        text: Translation.tr("Memory")
-                        autoToggle: false
-
-                        checked: Config.getNestedValue("background.widgets.systemMonitor.showMemory", true)
-                        onToggledByUser: checked => Config.setNestedValue("background.widgets.systemMonitor.showMemory", checked)
+                        buttonText: Translation.tr("Memory")
                     }
-                    SettingsSwitch {
-                        Layout.fillWidth: false
+                    WidgetToggleChip {
+                        configPath: "background.widgets.systemMonitor.showGpu"
+                        defaultValue: true
                         buttonIcon: "developer_board"
-                        text: Translation.tr("GPU")
-                        autoToggle: false
-
-                        checked: Config.getNestedValue("background.widgets.systemMonitor.showGpu", true)
-                        onToggledByUser: checked => Config.setNestedValue("background.widgets.systemMonitor.showGpu", checked)
+                        buttonText: Translation.tr("GPU")
                     }
                 }
 
-                SettingsSwitch {
-                    buttonIcon: "label"
-                    text: Translation.tr("Show labels and percentages")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.systemMonitor.showLabels", true)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.systemMonitor.showLabels", checked)
+                WidgetSettingRow {
+                    label: Translation.tr("Labels")
+                    icon: "label"
+                    trailing: false
+                    WidgetToggleChip {
+                        configPath: "background.widgets.systemMonitor.showLabels"
+                        defaultValue: true
+                        buttonIcon: "label"
+                        buttonText: Translation.tr("Labels and percentages")
+                    }
                 }
             }
 
             ContentSubsection {
                 title: Translation.tr("Dimensions")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Width"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Width")
                     StyledSpinBox {
                         from: 120; to: 800; stepSize: 20
                         value: Config.getNestedValue("background.widgets.systemMonitor.contentWidth", 320)
                         onValueModified: Config.setNestedValue("background.widgets.systemMonitor.contentWidth", value)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Height"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Height")
                     StyledSpinBox {
                         from: 40; to: 400; stepSize: 10
                         value: Config.getNestedValue("background.widgets.systemMonitor.contentHeight", 120)
@@ -1399,31 +1414,28 @@ ContentPage {
             ContentSubsection {
                 title: Translation.tr("Style")
 
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Track opacity"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Track opacity")
+                    trailing: false
                     StyledSlider {
                         from: 0; to: 0.5; stepSize: 0.02
                         value: Config.getNestedValue("background.widgets.systemMonitor.trackAlpha", 0.08)
                         onMoved: Config.setNestedValue("background.widgets.systemMonitor.trackAlpha", Math.round(value * 100) / 100)
                     }
                 }
-                ConfigRow {
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Fill opacity"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                WidgetSettingRow {
+                    label: Translation.tr("Fill opacity")
+                    trailing: false
                     StyledSlider {
                         from: 0.1; to: 1; stepSize: 0.05
                         value: Config.getNestedValue("background.widgets.systemMonitor.fillOpacity", 0.7)
                         onMoved: Config.setNestedValue("background.widgets.systemMonitor.fillOpacity", Math.round(value * 100) / 100)
                     }
                 }
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.systemMonitor.displayMode", "bars")) === "graph"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Graph fill opacity"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Graph fill opacity")
+                    trailing: false
                     StyledSlider {
                         from: 0; to: 1; stepSize: 0.05
                         value: Config.getNestedValue("background.widgets.systemMonitor.graphFillOpacity", 0.3)
@@ -1488,21 +1500,16 @@ ContentPage {
                 wrapMode: Text.WordWrap
             }
 
-            ConfigRow {
-                Layout.fillWidth: true
-                SettingsSwitch {
-                    Layout.fillWidth: false
+            WidgetSettingRow {
+                label: Translation.tr("State")
+                icon: "check"
+                trailing: false
+                WidgetToggleChip {
+                    configPath: "background.widgets.battery.enable"
                     buttonIcon: "check"
-                    text: Translation.tr("Enable")
-                    autoToggle: false
-
-                    checked: Config.getNestedValue("background.widgets.battery.enable", false)
-                    onToggledByUser: checked => Config.setNestedValue("background.widgets.battery.enable", checked)
-                    StyledToolTip {
-                        text: Translation.tr("Show battery status on the desktop (only visible on laptops)")
-                    }
+                    buttonText: Translation.tr("Enable")
+                    StyledToolTip { text: Translation.tr("Show battery status on the desktop (only visible on laptops)") }
                 }
-                Item { Layout.fillWidth: true }
                 WidgetPlacementSelector {
                     configPath: "background.widgets.battery"
                     configEntry: Config.getNestedValue("background.widgets.battery", ({}))
@@ -1564,11 +1571,9 @@ ContentPage {
                     ]
                 }
 
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "ring"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Ring size"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Ring size")
                     StyledSpinBox {
                         from: 40; to: 120; stepSize: 4
                         value: Config.getNestedValue("background.widgets.battery.ringSize", 72)
@@ -1576,11 +1581,9 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "ring"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Line width"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Line width")
                     StyledSpinBox {
                         from: 1; to: 16; stepSize: 1
                         value: Config.getNestedValue("background.widgets.battery.ringLineWidth", 6)
@@ -1588,33 +1591,27 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "bars"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar count"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Bar count")
                     StyledSpinBox {
                         from: 4; to: 48; stepSize: 2
                         value: Config.getNestedValue("background.widgets.battery.barCount", 20)
                         onValueModified: Config.setNestedValue("background.widgets.battery.barCount", value)
                     }
                 }
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "bars"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar spacing"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Bar spacing")
                     StyledSpinBox {
                         from: 0; to: 8; stepSize: 1
                         value: Config.getNestedValue("background.widgets.battery.barSpacing", 2)
                         onValueModified: Config.setNestedValue("background.widgets.battery.barSpacing", value)
                     }
                 }
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "bars"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Bar radius"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Bar radius")
                     StyledSpinBox {
                         from: 0; to: 12; stepSize: 1
                         value: Config.getNestedValue("background.widgets.battery.barRadius", 2)
@@ -1622,11 +1619,9 @@ ContentPage {
                     }
                 }
 
-                ConfigRow {
+                WidgetSettingRow {
                     visible: (Config.getNestedValue("background.widgets.battery.displayMode", "ring")) === "pill"
-                    Layout.fillWidth: true
-                    StyledText { text: Translation.tr("Pill height"); color: Appearance.colors.colOnLayer1 }
-                    Item { Layout.fillWidth: true }
+                    label: Translation.tr("Pill height")
                     StyledSpinBox {
                         from: 4; to: 32; stepSize: 2
                         value: Config.getNestedValue("background.widgets.battery.pillHeight", 12)
@@ -1704,33 +1699,22 @@ ContentPage {
                 spacing: 6
 
                 // Create new
-                RippleButton {
-                    width: implicitWidth; height: 36
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
-                    colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.20)
-                    colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
-                    downAction: () => { _cwCreateRow.visible = !_cwCreateRow.visible }
-                    contentItem: Row {
-                        anchors.centerIn: parent; spacing: 6; leftPadding: 14; rightPadding: 14
-                        MaterialSymbol { text: "add"; iconSize: 18; color: Appearance.colors.colPrimary; anchors.verticalCenter: parent.verticalCenter }
-                        StyledText { text: Translation.tr("New"); color: Appearance.colors.colPrimary; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
-                    }
+                SelectionGroupButton {
+                    Layout.fillWidth: false
+                    leftmost: true; rightmost: true
+                    buttonIcon: "add"
+                    buttonText: Translation.tr("New")
+                    onClicked: _cwCreateRow.visible = !_cwCreateRow.visible
                 }
 
                 // Install example
-                RippleButton {
-                    width: implicitWidth; height: 36
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.08)
-                    colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.12)
-                    downAction: () => CustomWidgets.installExample()
-                    contentItem: Row {
-                        anchors.centerIn: parent; spacing: 6; leftPadding: 14; rightPadding: 14
-                        MaterialSymbol { text: "download"; iconSize: 18; color: Appearance.colors.colOnLayer1; anchors.verticalCenter: parent.verticalCenter }
-                        StyledText { text: Translation.tr("Example"); color: Appearance.colors.colOnLayer1; font.pixelSize: Appearance.font.pixelSize.small; anchors.verticalCenter: parent.verticalCenter }
-                    }
+                SelectionGroupButton {
+                    visible: !root._customWidgetInstalled("example-widget")
+                    Layout.fillWidth: false
+                    leftmost: true; rightmost: true
+                    buttonIcon: "download"
+                    buttonText: Translation.tr("Example")
+                    onClicked: CustomWidgets.installExample()
                     StyledToolTip { text: Translation.tr("Install the built-in example widget to learn from") }
                 }
 
@@ -1785,26 +1769,20 @@ ContentPage {
                             }
                         }
                     }
-                    RippleButton {
+                    SelectionGroupButton {
                         id: _cwCreateBtn
-                        width: implicitWidth; height: 40
-                        buttonRadius: Appearance.rounding.full
+                        Layout.fillWidth: false
+                        leftmost: true; rightmost: true
+                        buttonIcon: "add"
+                        buttonText: Translation.tr("Create")
                         enabled: _newWidgetNameField.text.length > 0
                         opacity: enabled ? 1 : 0.4
-                        colBackground: Appearance.colors.colPrimary
-                        colBackgroundHover: Qt.lighter(Appearance.colors.colPrimary, 1.1)
-                        colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnPrimary, 0.24)
-                        downAction: () => {
+                        onClicked: {
                             if (_newWidgetNameField.text.length > 0) {
                                 CustomWidgets.create(_newWidgetNameField.text);
                                 _newWidgetNameField.text = "";
                                 _cwCreateRow.visible = false;
                             }
-                        }
-                        contentItem: Row {
-                            anchors.centerIn: parent; spacing: 6; leftPadding: 16; rightPadding: 16
-                            MaterialSymbol { text: "add"; iconSize: 18; color: Appearance.colors.colOnPrimary; anchors.verticalCenter: parent.verticalCenter }
-                            StyledText { text: Translation.tr("Create"); color: Appearance.colors.colOnPrimary; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
                         }
                     }
                 }
@@ -1857,19 +1835,15 @@ ContentPage {
                 required property int index
 
                 // Header: enable + name + actions
-                ConfigRow {
-                    Layout.fillWidth: true
-                    SettingsSwitch {
-                        Layout.fillWidth: false
-                        buttonIcon: cwDelegate.modelData.icon || "widgets"
-                        text: cwDelegate.modelData.name
-                        readonly property bool currentEnabled: Config.getNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", false)
-                        autoToggle: false
-
-                        checked: currentEnabled
-                        onToggledByUser: checked => Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", checked)
+                WidgetSettingRow {
+                    label: cwDelegate.modelData.name
+                    icon: cwDelegate.modelData.icon || "widgets"
+                    trailing: false
+                    WidgetToggleChip {
+                        configPath: "background.widgets.custom." + cwDelegate.modelData.id + ".enable"
+                        buttonIcon: "check"
+                        buttonText: Translation.tr("Enable")
                     }
-                    Item { Layout.fillWidth: true }
                     WidgetPlacementSelector {
                         configPath: "background.widgets.custom." + cwDelegate.modelData.id
                         configEntry: Config.getNestedValue("background.widgets.custom." + cwDelegate.modelData.id, ({}))
@@ -1916,20 +1890,14 @@ ContentPage {
                             color: Appearance.colors.colOnLayer1
                         }
                         Item { Layout.fillWidth: true }
-                        RippleButton {
-                            width: implicitWidth; height: 32
-                            buttonRadius: Appearance.rounding.full
-                            colBackground: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
-                            colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.20)
-                            colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24)
-                            downAction: () => {
+                        SelectionGroupButton {
+                            Layout.fillWidth: false
+                            leftmost: true; rightmost: true
+                            buttonIcon: "drag_pan"
+                            buttonText: Translation.tr("Edit on desktop")
+                            onClicked: {
                                 Config.setNestedValue("background.widgets.custom." + cwDelegate.modelData.id + ".enable", true);
                                 GlobalStates.widgetEditMode = true;
-                            }
-                            contentItem: Row {
-                                anchors.centerIn: parent; spacing: 6; leftPadding: 14; rightPadding: 14
-                                MaterialSymbol { text: "drag_pan"; iconSize: 16; color: Appearance.colors.colPrimary; anchors.verticalCenter: parent.verticalCenter }
-                                StyledText { text: Translation.tr("Edit on desktop"); color: Appearance.colors.colPrimary; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
                             }
                         }
                     }
@@ -1939,11 +1907,9 @@ ContentPage {
                     visible: Object.keys(cwDelegate.modelData.resizableAxes || {}).length > 0
                     title: Translation.tr("Size")
 
-                    ConfigRow {
+                    WidgetSettingRow {
                         visible: (cwDelegate.modelData.resizableAxes || {}).width !== undefined
-                        Layout.fillWidth: true
-                        StyledText { text: Translation.tr("Width"); color: Appearance.colors.colOnLayer1 }
-                        Item { Layout.fillWidth: true }
+                        label: Translation.tr("Width")
                         StyledSpinBox {
                             from: 40; to: 2000; stepSize: 10
                             value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).width ?? "contentWidth", cwDelegate.modelData.defaultSize?.width ?? 200)
@@ -1951,11 +1917,9 @@ ContentPage {
                         }
                     }
 
-                    ConfigRow {
+                    WidgetSettingRow {
                         visible: (cwDelegate.modelData.resizableAxes || {}).height !== undefined
-                        Layout.fillWidth: true
-                        StyledText { text: Translation.tr("Height"); color: Appearance.colors.colOnLayer1 }
-                        Item { Layout.fillWidth: true }
+                        label: Translation.tr("Height")
                         StyledSpinBox {
                             from: 30; to: 1200; stepSize: 10
                             value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).height ?? "contentHeight", cwDelegate.modelData.defaultSize?.height ?? 100)
@@ -1963,11 +1927,9 @@ ContentPage {
                         }
                     }
 
-                    ConfigRow {
+                    WidgetSettingRow {
                         visible: (cwDelegate.modelData.resizableAxes || {}).uniform !== undefined && (cwDelegate.modelData.resizableAxes || {}).uniform !== "widgetScale"
-                        Layout.fillWidth: true
-                        StyledText { text: Translation.tr("Size"); color: Appearance.colors.colOnLayer1 }
-                        Item { Layout.fillWidth: true }
+                        label: Translation.tr("Size")
                         StyledSpinBox {
                             from: 30; to: 2000; stepSize: 10
                             value: CustomWidgets.getConfigValue(cwDelegate.modelData.id, (cwDelegate.modelData.resizableAxes || {}).uniform ?? "size", cwDelegate.modelData.defaultSize?.width ?? 200)
@@ -2035,28 +1997,16 @@ ContentPage {
                             }));
                         }
 
-                        ConfigRow {
+                        WidgetSettingRow {
                             required property var modelData
-                            Layout.fillWidth: true
-                            StyledText { text: modelData.spec.label || modelData.key; color: Appearance.colors.colOnLayer1 }
-                            Item { Layout.fillWidth: true }
+                            label: modelData.spec.label || modelData.key
+                            trailing: false
 
-                            RippleButton {
+                            StyledSwitch {
                                 visible: modelData.spec.type === "bool"
                                 readonly property bool currentChecked: CustomWidgets.getConfigValue(modelData.widgetId, modelData.key, modelData.spec.default ?? false)
-                                width: 40; height: 28
-                                buttonRadius: Appearance.rounding.small
-                                toggled: currentChecked
-                                colBackground: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.16) : ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.06)
-                                colBackgroundHover: toggled ? ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.24) : ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.12)
-                                colRipple: ColorUtils.applyAlpha(Appearance.colors.colPrimary, 0.12)
-                                downAction: () => CustomWidgets.setConfigValue(modelData.widgetId, modelData.key, !currentChecked)
-                                contentItem: MaterialSymbol {
-                                    anchors.centerIn: parent
-                                    text: parent.toggled ? "check" : "close"
-                                    iconSize: 16
-                                    color: parent.toggled ? Appearance.colors.colPrimary : ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.55)
-                                }
+                                checked: currentChecked
+                                onClicked: CustomWidgets.setConfigValue(modelData.widgetId, modelData.key, checked)
                             }
                             StyledSpinBox {
                                 visible: modelData.spec.type === "int"
@@ -2075,7 +2025,7 @@ ContentPage {
                                 Layout.fillWidth: false
                                 currentValue: CustomWidgets.getConfigValue(modelData.widgetId, modelData.key, modelData.spec.default ?? "")
                                 onSelected: newValue => CustomWidgets.setConfigValue(modelData.widgetId, modelData.key, newValue)
-                                options: (modelData.spec.options || []).map(o => ({ displayName: o, value: o }))
+                                options: root._manifestOptions(modelData.spec.options)
                             }
                             MaterialTextField {
                                 visible: modelData.spec.type === "string" && (modelData.spec.options === undefined)
@@ -2097,65 +2047,25 @@ ContentPage {
     }
 
     // Delete confirmation overlay (shared for all custom widgets)
-    Rectangle {
+    NoticeBox {
         id: _cwDeleteConfirm
         property string widgetId: ""
         property string widgetName: ""
         visible: false
         Layout.fillWidth: true
-        implicitHeight: _delCol.implicitHeight + 24
-        radius: Appearance.rounding.normal
-        color: ColorUtils.applyAlpha(Appearance.colors.colError, 0.08)
-        border.width: 1
-        border.color: ColorUtils.applyAlpha(Appearance.colors.colError, 0.2)
+        materialIcon: "delete"
+        text: Translation.tr("Remove '%1'? This deletes the widget folder permanently.").arg(_cwDeleteConfirm.widgetName)
 
-        ColumnLayout {
-            id: _delCol
-            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 12 }
-            spacing: 8
-
-            StyledText {
-                Layout.fillWidth: true
-                text: Translation.tr("Remove '%1'? This deletes the widget folder permanently.").arg(_cwDeleteConfirm.widgetName)
-                color: Appearance.colors.colOnLayer1
-                font.pixelSize: Appearance.font.pixelSize.small
-                wrapMode: Text.WordWrap
-            }
-
-            Row {
-                Layout.alignment: Qt.AlignRight
-                spacing: 8
-
-                RippleButton {
-                    width: implicitWidth; height: 32
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: "transparent"
-                    colBackgroundHover: ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.08)
-                    colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnLayer1, 0.12)
-                    downAction: () => { _cwDeleteConfirm.visible = false }
-                    contentItem: StyledText {
-                        anchors.centerIn: parent; leftPadding: 16; rightPadding: 16
-                        text: Translation.tr("Cancel")
-                        color: Appearance.colors.colOnLayer1
-                        font.pixelSize: Appearance.font.pixelSize.small
-                    }
-                }
-                RippleButton {
-                    width: implicitWidth; height: 32
-                    buttonRadius: Appearance.rounding.full
-                    colBackground: Appearance.colors.colError
-                    colBackgroundHover: Qt.lighter(Appearance.colors.colError, 1.1)
-                    colRipple: ColorUtils.applyAlpha(Appearance.colors.colOnError, 0.24)
-                    downAction: () => {
-                        CustomWidgets.remove(_cwDeleteConfirm.widgetId);
-                        _cwDeleteConfirm.visible = false;
-                    }
-                    contentItem: Row {
-                        anchors.centerIn: parent; spacing: 6; leftPadding: 16; rightPadding: 16
-                        MaterialSymbol { text: "delete"; iconSize: 16; color: Appearance.colors.colOnError; anchors.verticalCenter: parent.verticalCenter }
-                        StyledText { text: Translation.tr("Delete"); color: Appearance.colors.colOnError; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; anchors.verticalCenter: parent.verticalCenter }
-                    }
-                }
+        DialogButton {
+            buttonText: Translation.tr("Cancel")
+            onClicked: _cwDeleteConfirm.visible = false
+        }
+        DialogButton {
+            buttonText: Translation.tr("Delete")
+            colEnabled: Appearance.colors.colError
+            onClicked: {
+                CustomWidgets.remove(_cwDeleteConfirm.widgetId);
+                _cwDeleteConfirm.visible = false;
             }
         }
     }

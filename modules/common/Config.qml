@@ -15,6 +15,7 @@ Singleton {
     property bool blockWrites: false
     // Custom widget data stored outside JsonAdapter to avoid VME crash on property var
     property var customWidgetData: ({})
+    property bool customWidgetDataSynced: false
 
     signal configChanged
 
@@ -157,11 +158,23 @@ Singleton {
     // Custom widget data lives outside the JsonAdapter (property var inside
     // nested JsonObjects causes a VME segfault). Sync from raw JSON on load.
     function _syncVarProperties(): void {
+        let text = "";
         try {
-            rawConfigReader.reload();
-            const raw = JSON.parse(rawConfigReader.text());
-            root.customWidgetData = raw?.background?.widgets?.custom ?? {};
+            text = configFileView.text();
         } catch (e) {}
+        if (!text || text.length === 0) {
+            try {
+                rawConfigReader.reload();
+                text = rawConfigReader.text();
+            } catch (e) {}
+        }
+        try {
+            const raw = JSON.parse(text);
+            root.customWidgetData = raw?.background?.widgets?.custom ?? {};
+            root.customWidgetDataSynced = true;
+        } catch (e) {
+            root.customWidgetDataSynced = false;
+        }
     }
 
     // writeAdapter() is async — onSaved fires when done. Suppress reloads
@@ -187,6 +200,12 @@ Singleton {
         if (root._hasObjectKeys(root.customWidgetData))
             return root._cloneObject(root.customWidgetData);
         try {
+            const current = JSON.parse(configFileView.text());
+            const currentCustom = current?.background?.widgets?.custom ?? {};
+            if (root._hasObjectKeys(currentCustom))
+                return root._cloneObject(currentCustom);
+        } catch (e) {}
+        try {
             rawConfigReader.reload();
             const raw = JSON.parse(rawConfigReader.text());
             const diskCustom = raw?.background?.widgets?.custom ?? {};
@@ -208,8 +227,7 @@ Singleton {
             ? root._customSnapshotForInject : root.customWidgetData;
         if (!root._hasObjectKeys(customData)) return;
         try {
-            rawConfigReader.reload();
-            const text = rawConfigReader.text();
+            const text = configFileView.text();
             if (!text) return;
             const obj = JSON.parse(text);
             if (!obj.background) obj.background = {};
@@ -260,7 +278,6 @@ Singleton {
         watchChanges: true
         blockWrites: root.blockWrites
         onFileChanged: fileReloadTimer.restart()
-        onAdapterUpdated: fileWriteTimer.restart()
         onSaved: {
             root._writeInFlight = false;
             if (root._pendingCustomInject) {
@@ -287,6 +304,8 @@ Singleton {
                 // Ensure parent directory exists
                 const parentDir = root.filePath.substring(0, root.filePath.lastIndexOf('/'));
                 Quickshell.execDetached(["/usr/bin/mkdir", "-p", parentDir]);
+                root.customWidgetData = {};
+                root.customWidgetDataSynced = true;
                 writeAdapter();
             }
             // Set ready even on failure so UI doesn't stay blank

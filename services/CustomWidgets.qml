@@ -23,6 +23,9 @@ Singleton {
         function onReadyChanged() {
             root._seedMissingConfig();
         }
+        function onCustomWidgetDataSyncedChanged() {
+            root._seedMissingConfig();
+        }
     }
 
     function reload(): void {
@@ -90,6 +93,8 @@ Singleton {
                     icon: m.icon || "widgets",
                     version: m.version || "1.0",
                     author: m.author || "",
+                    description: m.description || "",
+                    category: m.category || "",
                     qmlPath: `file://${entry.dir}/${qmlFile}`,
                     dirPath: entry.dir,
                     configKeys: m.configKeys || {},
@@ -117,7 +122,13 @@ Singleton {
             return spec.default;
         const type = spec?.type ?? "bool";
         if (type === "bool") return false;
-        if (type === "string") return (spec?.options && spec.options.length > 0) ? spec.options[0] : "";
+        if (type === "string") {
+            if (spec?.options && spec.options.length > 0) {
+                const first = spec.options[0];
+                return (first && typeof first === "object") ? (first.value ?? first.label ?? first.displayName ?? "") : first;
+            }
+            return "";
+        }
         return 0;
     }
 
@@ -152,7 +163,7 @@ Singleton {
     }
 
     function _seedMissingConfig(): void {
-        if (!Config.ready || !root._scanDone || root.widgets.length === 0)
+        if (!Config.ready || !Config.customWidgetDataSynced || !root._scanDone || root.widgets.length === 0)
             return;
         let updates = {};
         for (let i = 0; i < root.widgets.length; i++) {
@@ -245,7 +256,18 @@ Singleton {
     "icon": "widgets",
     "version": "1.0",
     "author": "",
+    "description": "Custom desktop widget",
+    "category": "custom",
     "main": "${_createProcess._pascalName}.qml",
+    "defaultConfig": {
+        "placementStrategy": "free",
+        "widgetScale": 100,
+        "widgetOpacity": 100,
+        "colorMode": "auto",
+        "dim": 0,
+        "x": 200,
+        "y": 200
+    },
     "configKeys": {
         "label": { "type": "string", "default": "${_createProcess._pascalName}", "label": "Widget label" },
         "showIcon": { "type": "bool", "default": true, "label": "Show icon" }
@@ -386,6 +408,7 @@ QML
             src="${root._exampleWidgetPath}"
             dest="${root.widgetsDir}/example-widget"
             [ -d "$src" ] || { echo "fail"; exit 1; }
+            [ -e "$dest" ] && { echo "exists"; exit 0; }
             mkdir -p "$dest"
             cp -r "$src"/* "$dest"/
             echo "done"

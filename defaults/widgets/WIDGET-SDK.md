@@ -32,11 +32,23 @@ Or copy the reference widget from `defaults/widgets/example-widget/`.
     "icon": "dashboard",
     "version": "1.0",
     "author": "you",
+    "description": "Short text shown in settings",
+    "category": "system",
     "main": "MyWidget.qml",
+    "defaultConfig": {
+        "placementStrategy": "free",
+        "widgetScale": 100,
+        "widgetOpacity": 100,
+        "colorMode": "auto",
+        "x": 200,
+        "y": 200
+    },
     "configKeys": {
         "showLabel":  { "type": "bool",   "default": true,       "label": "Show label" },
         "fontSize":   { "type": "int",    "default": 14, "min": 8, "max": 48, "label": "Font size" },
         "message":    { "type": "string", "default": "Hello",    "label": "Message" },
+        "style":      { "type": "string", "default": "pill",     "label": "Style",
+                        "options": [{ "label": "Pill", "value": "pill" }, { "label": "Card", "value": "card" }] },
         "opacity":    { "type": "real",   "default": 0.8, "min": 0, "max": 1, "label": "Opacity" }
     },
     "resizableAxes": { "uniform": "widgetScale" },
@@ -300,7 +312,7 @@ FadeLoader {
 ```qml
 StyledSlider {
     from: 0; to: 100; value: 50
-    onValueChanged: Config.setNestedValue("background.widgets.custom.my-widget.myVal", value)
+    onMoved: Config.setNestedValue("background.widgets.custom.my-widget.myVal", value)
 }
 StyledSpinBox {
     from: 0; to: 100; stepSize: 5; value: 50
@@ -320,8 +332,9 @@ Widget config persists in `~/.config/inir/config.json` under
 // Via inherited helper (reads from configEntry):
 readonly property bool showLabel: _readConfigKey("showLabel") ?? true
 
-// Direct access:
-readonly property int myVal: Config.options?.background?.widgets?.custom?.["my-widget"]?.myVal ?? 42
+// Direct access through Config.getNestedValue() is required for custom widgets,
+// because the custom namespace is stored outside JsonAdapter for VM safety:
+readonly property int myVal: Config.getNestedValue("background.widgets.custom.my-widget.myVal", 42)
 
 // Or via CustomWidgets helper:
 readonly property var myVal: CustomWidgets.getConfigValue("my-widget", "myVal", 42)

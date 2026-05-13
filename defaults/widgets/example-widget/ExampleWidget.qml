@@ -22,6 +22,7 @@ AbstractBackgroundWidget {
         widgetScale: 100, widgetOpacity: 100, colorMode: "auto", dim: 0,
         showTime: true, showWeather: true, showBattery: true,
         showNetwork: true, showVolume: true,
+        surfaceStyle: "pill", showLabels: false, padding: 10, spacing: 10, fontScale: 100,
         x: 300, y: 300
     })
 
@@ -31,9 +32,13 @@ AbstractBackgroundWidget {
     resizeMinWidth: 120
     resizeMinHeight: 36
 
-    readonly property int pad: Math.round(10 * scaleFactor)
+    readonly property string cfgSurfaceStyle: _readConfigKey("surfaceStyle") ?? "pill"
+    readonly property bool cfgShowLabels: _readConfigKey("showLabels") ?? false
+    readonly property int pad: Math.round(Number(_readConfigKey("padding") ?? 10) * scaleFactor)
+    readonly property int itemSpacing: Math.round(Number(_readConfigKey("spacing") ?? 10) * scaleFactor)
+    readonly property real textScale: Math.max(0.7, Math.min(1.6, Number(_readConfigKey("fontScale") ?? 100) / 100))
     readonly property real ico: Math.round(16 * scaleFactor)
-    readonly property real fs: Math.round(Appearance.font.pixelSize.small * scaleFactor)
+    readonly property real fs: Math.round(Appearance.font.pixelSize.small * scaleFactor * textScale)
 
     // Read config values (null-safe, with fallbacks)
     readonly property bool cfgTime: _readConfigKey("showTime") ?? true
@@ -83,15 +88,17 @@ AbstractBackgroundWidget {
     // Card background — uses inherited card control properties
     Rectangle {
         anchors.fill: parent
-        radius: root.cornerRadiusOverride >= 0 ? root.cornerRadiusOverride : Appearance.rounding.small
-        color: root.backgroundOpacity > 0 ? ColorUtils.applyAlpha(root.colText, root.backgroundOpacity) : "transparent"
-        border { width: root.borderWidth; color: ColorUtils.applyAlpha(root.colText, root.borderOpacity) }
+        radius: root.cfgSurfaceStyle === "pill" ? Appearance.rounding.full : (root.cornerRadiusOverride >= 0 ? root.cornerRadiusOverride : Appearance.rounding.small)
+        color: root.cfgSurfaceStyle === "minimal" || root.cfgSurfaceStyle === "outline" ? "transparent"
+            : ColorUtils.applyAlpha(root.colText, root.cfgSurfaceStyle === "card" ? Math.max(root.backgroundOpacity, 0.10) : Math.max(root.backgroundOpacity, 0.06))
+        border.width: root.cfgSurfaceStyle === "outline" ? Math.max(1, root.borderWidth) : 0
+        border.color: ColorUtils.applyAlpha(root.colText, Math.max(root.borderOpacity, 0.16))
     }
 
     Row {
         id: contentRow
         anchors.centerIn: parent
-        spacing: Math.round(10 * root.scaleFactor)
+        spacing: root.itemSpacing
 
         // Time — uses DateTime service
         Row {
@@ -99,6 +106,12 @@ AbstractBackgroundWidget {
             spacing: Math.round(4 * root.scaleFactor)
             anchors.verticalCenter: parent.verticalCenter
             MaterialSymbol { text: "schedule"; iconSize: root.ico; color: root.colText; anchors.verticalCenter: parent.verticalCenter }
+            StyledText {
+                visible: root.cfgShowLabels
+                text: "Time"
+                font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor * root.textScale)
+                color: ColorUtils.applyAlpha(root.colText, 0.55); anchors.verticalCenter: parent.verticalCenter
+            }
             StyledText {
                 text: DateTime.time
                 font { pixelSize: root.fs; family: Appearance.font.family.numbers }
@@ -114,6 +127,12 @@ AbstractBackgroundWidget {
             MaterialSymbol {
                 text: Weather.isNightNow() ? "nights_stay" : "wb_sunny"
                 iconSize: root.ico; color: root.colText; anchors.verticalCenter: parent.verticalCenter
+            }
+            StyledText {
+                visible: root.cfgShowLabels
+                text: "Weather"
+                font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor * root.textScale)
+                color: ColorUtils.applyAlpha(root.colText, 0.55); anchors.verticalCenter: parent.verticalCenter
             }
             StyledText {
                 text: (Weather.data.temp ?? "--") + (Weather.useUSCS ? "\u00b0F" : "\u00b0C")
@@ -136,6 +155,12 @@ AbstractBackgroundWidget {
                 anchors.verticalCenter: parent.verticalCenter
             }
             StyledText {
+                visible: root.cfgShowLabels
+                text: "Battery"
+                font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor * root.textScale)
+                color: ColorUtils.applyAlpha(root.colText, 0.55); anchors.verticalCenter: parent.verticalCenter
+            }
+            StyledText {
                 text: Math.round(Battery.percentage * 100) + "%"
                 font { pixelSize: root.fs; family: Appearance.font.family.numbers }
                 color: root.colText; anchors.verticalCenter: parent.verticalCenter
@@ -148,6 +173,12 @@ AbstractBackgroundWidget {
             spacing: Math.round(4 * root.scaleFactor)
             anchors.verticalCenter: parent.verticalCenter
             MaterialSymbol { text: Network.materialSymbol; iconSize: root.ico; color: root.colText; anchors.verticalCenter: parent.verticalCenter }
+            StyledText {
+                visible: root.cfgShowLabels
+                text: "Network"
+                font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor * root.textScale)
+                color: ColorUtils.applyAlpha(root.colText, 0.55); anchors.verticalCenter: parent.verticalCenter
+            }
             StyledText {
                 visible: Network.wifi
                 text: Network.networkName || "WiFi"
@@ -165,6 +196,12 @@ AbstractBackgroundWidget {
                     : Audio.value > 0.5 ? "volume_up"
                     : Audio.value > 0 ? "volume_down" : "volume_mute"
                 iconSize: root.ico; color: root.colText; anchors.verticalCenter: parent.verticalCenter
+            }
+            StyledText {
+                visible: root.cfgShowLabels
+                text: "Volume"
+                font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor * root.textScale)
+                color: ColorUtils.applyAlpha(root.colText, 0.55); anchors.verticalCenter: parent.verticalCenter
             }
             StyledText {
                 text: Math.round((Audio.value ?? 0) * 100) + "%"

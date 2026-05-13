@@ -140,8 +140,8 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         StyledText { text: customDelegate.modelData.name; color: Appearance.colors.colOnLayer2; font.pixelSize: Appearance.font.pixelSize.small }
                         StyledText {
-                            visible: (customDelegate.modelData.author ?? "").length > 0
-                            text: customDelegate.modelData.author ?? ""
+                            visible: ((customDelegate.modelData.description ?? "").length > 0) || ((customDelegate.modelData.author ?? "").length > 0)
+                            text: (customDelegate.modelData.description ?? "").length > 0 ? customDelegate.modelData.description : (customDelegate.modelData.author ?? "")
                             color: ColorUtils.applyAlpha(Appearance.colors.colOnLayer2, 0.5)
                             font.pixelSize: Appearance.font.pixelSize.smaller
                         }

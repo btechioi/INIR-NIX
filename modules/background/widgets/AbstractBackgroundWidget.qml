@@ -240,6 +240,16 @@ AbstractWidget {
         root.y = root.targetY;
     }
 
+    function applyPlacementFromConfig(): void {
+        if (!Config.ready) return;
+        if (root._isZonePlacement) {
+            root.snapToZone(root.placementStrategy);
+        } else {
+            syncFreePositionFromConfig();
+            refreshPlacementIfNeeded();
+        }
+    }
+
     readonly property int _editGridSize: Config.getNestedValue("background.widgets.editGrid.size", 32)
     readonly property bool _snapEnabled: GlobalStates.widgetEditMode && (Config.getNestedValue("background.widgets.editGrid.snap", true))
 
@@ -683,7 +693,10 @@ AbstractWidget {
         if (Object.keys(updates).length > 0)
             Config.setNestedValues(updates);
     }
-    Component.onCompleted: _seedDefaultsIfNeeded()
+    Component.onCompleted: {
+        _seedDefaultsIfNeeded();
+        Qt.callLater(root.applyPlacementFromConfig);
+    }
     function resetToDefaults(): void {
         const prefix = root._configPath;
         const defaults = root.defaultConfig;
@@ -716,12 +729,7 @@ AbstractWidget {
     
     onWallpaperPathChanged: _placementDebounce.restart()
     onPlacementStrategyChanged: {
-        if (root._isZonePlacement) {
-            root.snapToZone(root.placementStrategy);
-        } else {
-            syncFreePositionFromConfig();
-            refreshPlacementIfNeeded();
-        }
+        root.applyPlacementFromConfig();
     }
     // Re-snap zone positions when screen size changes
     onScaledScreenWidthChanged: if (root._isZonePlacement) _zoneResnapDebounce.restart()
@@ -749,12 +757,7 @@ AbstractWidget {
         target: Config
         function onReadyChanged() {
             root._seedDefaultsIfNeeded();
-            if (root._isZonePlacement) {
-                root.snapToZone(root.placementStrategy);
-            } else {
-                refreshPlacementIfNeeded();
-                syncFreePositionFromConfig();
-            }
+            root.applyPlacementFromConfig();
         }
     }
     Timer {
