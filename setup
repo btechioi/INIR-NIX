@@ -2461,8 +2461,7 @@ run_update() {
 run_doctor() {
     echo ""
     tui_hero_card "iNiR Doctor" \
-        "Checks the boring but important stuff: dependencies, runtime payload, launcher, service wiring, theming, and the usual desktop-shell landmines." \
-        "It will apply safe fixes. It will not rewrite your git history like an idiot."
+        "Diagnosing and auto-fixing your shell setup."
     show_setup_context_card "Doctor Context"
     run_doctor_with_fixes
 }

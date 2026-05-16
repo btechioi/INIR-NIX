@@ -1473,7 +1473,8 @@ check_niri_config() {
 ###############################################################################
 
 # Run a doctor check as an animated step. Output is buffered while the
-# spinner runs, then printed below the resolved step line.
+# spinner runs. Single-result steps show the result inline on the step
+# line; multi-result steps expand details below.
 _doctor_run_step() {
     local step="$1" total="$2" desc="$3"; shift 3
     local tmpfile pre_failed pre_fixed
@@ -1487,16 +1488,26 @@ _doctor_run_step() {
     local new_fails=$((doctor_failed - pre_failed))
     local new_fixes=$((doctor_fixed - pre_fixed))
 
-    if [[ $new_fails -gt 0 ]]; then
-        tui_step_fail
-    elif [[ $new_fixes -gt 0 ]]; then
-        tui_step_warn "Fixed: $desc"
-    else
-        tui_step_done
+    # Count non-empty output lines
+    local lines=0
+    [[ -s "$tmpfile" ]] && lines=$(grep -c '.' "$tmpfile" 2>/dev/null || true)
+
+    # For single-result steps, extract the message for inline display
+    local msg=""
+    if [[ $lines -eq 1 ]]; then
+        msg=$(sed 's/\x1b\[[0-9;]*m//g; s/^[[:space:]]*//; s/^[✓✗⚠→] //' "$tmpfile")
     fi
 
-    # Always show check details
-    [[ -s "$tmpfile" ]] && sed 's/^/  /' "$tmpfile"
+    if [[ $new_fails -gt 0 ]]; then
+        tui_step_fail "${msg:-$desc}"
+    elif [[ $new_fixes -gt 0 ]]; then
+        tui_step_warn "${msg:-Fixed: $desc}"
+    else
+        tui_step_done "${msg:-$desc}"
+    fi
+
+    # Expand details for multi-result steps
+    (( lines > 1 )) && sed 's/^/  /' "$tmpfile"
     rm -f "$tmpfile"
 }
 
