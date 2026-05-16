@@ -1748,6 +1748,10 @@ Singleton {
                 property bool secondPrecision: false
             }
 
+            property JsonObject wallpapers: JsonObject {
+                property string directory: "" // Custom wallpapers directory path. Empty = ~/Pictures/Wallpapers
+            }
+
             property JsonObject wallpaperSelector: JsonObject {
                 property bool useSystemFileDialog: false
                 property string selectionTarget: "main"
