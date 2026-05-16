@@ -511,13 +511,15 @@ Singleton {
         // Light mode: reduce transparency slightly for better contrast on light wallpapers
         readonly property real _lightFactor: root._auroraLightMode ? 0.75 : 1.0
 
-        // Transparency levels (higher = more transparent) — read from Config
-        readonly property real overlayTransparentize: (Config.options?.appearance?.aurora?.transparency?.overlay ?? 0.38) * _lightFactor
-        readonly property real subSurfaceTransparentize: (Config.options?.appearance?.aurora?.transparency?.subSurface ?? 0.52) * _lightFactor
-        readonly property real popupTransparentize: (Config.options?.appearance?.aurora?.transparency?.popup ?? 0.42) * _lightFactor
-        readonly property real tooltipTransparentize: (Config.options?.appearance?.aurora?.transparency?.tooltip ?? 0.35) * _lightFactor
-        // Layer glass (used by colors.colLayer1/2/3 when auroraEverywhere)
-        readonly property real layerTransparentize: (Config.options?.appearance?.aurora?.transparency?.layer ?? 0.40) * _lightFactor
+        // Transparency levels — read from Config with revision dependency for live reactivity
+        // Config.revision forces re-evaluation when setNestedValue writes (JS bracket notation
+        // on nested JsonObjects doesn't trigger QML property notifications)
+        readonly property var _cfg: { Config.revision; return Config.options?.appearance?.aurora?.transparency ?? null }
+        readonly property real overlayTransparentize: (_cfg?.overlay ?? 0.38) * _lightFactor
+        readonly property real subSurfaceTransparentize: (_cfg?.subSurface ?? 0.52) * _lightFactor
+        readonly property real popupTransparentize: (_cfg?.popup ?? 0.42) * _lightFactor
+        readonly property real tooltipTransparentize: (_cfg?.tooltip ?? 0.35) * _lightFactor
+        readonly property real layerTransparentize: (_cfg?.layer ?? 0.40) * _lightFactor
         
         // === Main Panel Overlay (Layer 0) ===
         readonly property color colOverlay: ColorUtils.transparentize(root.colors.colLayer0Base, overlayTransparentize)
