@@ -123,7 +123,7 @@ declare -gA IPC_TARGET_FUNCTIONS=(
   [coverflowSelector]="toggle open close"
   [customWidgets]="reload list create remove"
   [gamemode]="toggle activate deactivate status"
-  [globalActions]="run list search open"
+  [globalActions]="run runWithArgs list search open"
   [keyboard]="switchLayout switchLayoutPrevious getCurrentLayout getLayouts"
   [lock]="activate deactivate status focus"
   [mediaControls]="toggle close open"
@@ -205,7 +205,8 @@ declare -gA IPC_FUNCTION_DESC=(
   ["gamemode:activate"]="Force enable gamemode"
   ["gamemode:deactivate"]="Force disable gamemode"
   ["gamemode:status"]="Print current gamemode state (e.g. \`active (manual)\`, \`inactive (off)\`)"
-  ["globalActions:run"]="Execute action by ID (e.g. \`toggle-mute\`, \`install-package vim\`)"
+  ["globalActions:run"]="Execute action by ID (e.g. \`run toggle-mute\`)"
+  ["globalActions:runWithArgs"]="Execute action by ID with extra arguments (e.g. \`runWithArgs install-package vim\`)"
   ["globalActions:list"]="List all actions, optionally filtered by category"
   ["globalActions:search"]="Fuzzy search actions by name/description/keywords"
   ["globalActions:open"]="Open the overview in action mode"
@@ -323,7 +324,8 @@ declare -gA IPC_FUNCTION_ARGS=(
   ["appCatalog:install"]="<id>"
   ["customWidgets:create"]="<name>"
   ["customWidgets:remove"]="<widgetId>"
-  ["globalActions:run"]="<actionId> <args>"
+  ["globalActions:run"]="<actionId>"
+  ["globalActions:runWithArgs"]="<actionId> <args>"
   ["globalActions:list"]="<category>"
   ["globalActions:search"]="<query>"
   ["minimize:restore"]="<windowId>"
@@ -341,7 +343,8 @@ bind "Alt+Shift+Tab" { spawn "inir" "altSwitcher" "previous"; }'
   [closeConfirm]='bind "Mod+Q" repeat=false { spawn "inir" "close-window"; }'
   [gamemode]='bind "Super+F12" { spawn "inir" "gamemode" "toggle"; }'
   [globalActions]='bind "Super+Slash" { spawn "inir" "globalActions" "open"; }
-bind "Super+M" { spawn "inir" "globalActions" "run" "toggle-mute"; }'
+bind "Super+M" { spawn "inir" "globalActions" "run" "toggle-mute"; }
+bind "Super+Shift+M" { spawn "inir" "globalActions" "runWithArgs" "install-package" "vim"; }'
   [keyboard]='bind "Mod+Alt+K" { spawn "inir" "keyboard" "switchLayout"; }'
   [lock]='bind "Super+Alt+L" allow-when-locked=true { spawn "inir" "lock" "activate"; }'
   [mpris]='bind "Ctrl+Mod+Space" { spawn "inir" "mpris" "playPause"; }

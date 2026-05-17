@@ -89,7 +89,13 @@ Singleton {
     IpcHandler {
         target: "globalActions"
 
-        function run(actionId: string, args: string): string {
+        function run(actionId: string): string {
+            if (root.runById(actionId, ""))
+                return "ok"
+            return "error: action not found: " + actionId
+        }
+
+        function runWithArgs(actionId: string, args: string): string {
             if (root.runById(actionId, args ?? ""))
                 return "ok"
             return "error: action not found: " + actionId
