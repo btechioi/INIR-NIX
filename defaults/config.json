@@ -256,7 +256,7 @@
         "manageUser": "kcmshell6 kcm_users",
         "network": "nm-connection-editor",
         "networkEthernet": "nm-connection-editor",
-        "taskManager": "missioncenter",
+        "taskManager": "mission-center",
         "terminal": "kitty",
         "volumeMixer": "pavucontrol",
         "update": "kitty -e arch-update"

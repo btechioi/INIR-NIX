@@ -103,7 +103,7 @@ check_dependencies() {
         "kwriteconfig6:KConfig"
         "checkupdates:pacman-contrib"
         "ddcutil:ddcutil"
-        "missioncenter:mission-center"
+        "mission-center:mission-center"
         "nm-connection-editor:nm-connection-editor"
         "xdg-settings:xdg-utils"
         "mpv:mpv"

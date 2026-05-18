@@ -679,7 +679,7 @@ Singleton {
                 property string bluetooth: "kcmshell6 kcm_bluetooth"
                 property string network: "kitty -1 fish -c nmtui"
                 property string networkEthernet: "kcmshell6 kcm_networkmanagement"
-                property string taskManager: "missioncenter"
+                property string taskManager: "mission-center"
                 property string terminal: "kitty" // This is only for shell actions
                 property string browser: "firefox" // Used by launcher-backed browser shortcuts
                 property string volumeMixer: "pavucontrol"
