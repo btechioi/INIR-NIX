@@ -102,11 +102,7 @@ Singleton {
 
     function setNestedValue(nestedKey, value) {
         _applyNestedKey(nestedKey, value);
-        // Track the mutation for direct disk write
-        const key = Array.isArray(nestedKey) ? nestedKey.join(".") : nestedKey;
-        const mutations = Object.assign({}, root._pendingMutations);
-        mutations[key] = value;
-        root._pendingMutations = mutations;
+        _applyToMirror(nestedKey, value);
         fileWriteTimer.restart();
         root._bumpRevision();
         root.configChanged();
@@ -118,17 +114,29 @@ Singleton {
         if (!updates || typeof updates !== "object")
             return;
         const paths = Object.keys(updates);
-        const mutations = Object.assign({}, root._pendingMutations);
         for (let i = 0; i < paths.length; ++i) {
             _applyNestedKey(paths[i], updates[paths[i]]);
-            mutations[paths[i]] = updates[paths[i]];
+            _applyToMirror(paths[i], updates[paths[i]]);
         }
         if (paths.length > 0) {
-            root._pendingMutations = mutations;
             fileWriteTimer.restart();
             root._bumpRevision();
             root.configChanged();
         }
+    }
+
+    function _applyToMirror(nestedKey, value): void {
+        let keys = Array.isArray(nestedKey) ? nestedKey : String(nestedKey).split(".");
+        if (keys.length === 0) return;
+        // Skip custom widget paths — those are handled separately
+        if (keys.length >= 3 && keys[0] === "background" && keys[1] === "widgets" && keys[2] === "custom") return;
+        let obj = root._jsonMirror;
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (!obj[keys[i]] || typeof obj[keys[i]] !== "object")
+                obj[keys[i]] = {};
+            obj = obj[keys[i]];
+        }
+        obj[keys[keys.length - 1]] = value;
     }
 
     function getNestedValue(nestedKey, fallback) {
@@ -189,9 +197,10 @@ Singleton {
     property bool _pendingCustomInject: false
     property bool _pendingReload: false
     property var _customSnapshotForInject: ({})
-    // Accumulate key-value mutations between write timer ticks.
-    // Applied directly to disk JSON, bypassing adapter serialization entirely.
-    property var _pendingMutations: ({})
+    // In-memory mirror of the disk JSON. Updated synchronously on every
+    // setNestedValue call. This is the authoritative source for writes —
+    // never read back from FileView.text() or the adapter for serialization.
+    property var _jsonMirror: ({})
 
     function _cloneObject(obj: var): var {
         try {
@@ -231,51 +240,35 @@ Singleton {
             root.customWidgetData = root._cloneObject(root._customSnapshotForInject);
     }
 
-    // Direct write: read current disk JSON, apply pending mutations, write back.
-    // Does NOT read from the adapter — QS 0.3's QObjects don't reliably reflect
-    // JS mutations to nested properties via Object.keys/property access.
+    // Write the in-memory JSON mirror to disk.
     function _writeDirectFromAdapter(): void {
         try {
-            const mutations = root._pendingMutations;
-            root._pendingMutations = ({});
-
-            // Read the current disk state as base
-            const currentText = configFileView.text() ?? "";
-            let obj = currentText.length > 0 ? JSON.parse(currentText) : {};
-
-            // Apply accumulated mutations
-            const keys = Object.keys(mutations);
-            for (let i = 0; i < keys.length; i++) {
-                const path = keys[i].split(".");
-                let target = obj;
-                for (let j = 0; j < path.length - 1; j++) {
-                    if (!target[path[j]] || typeof target[path[j]] !== "object")
-                        target[path[j]] = {};
-                    target = target[path[j]];
-                }
-                target[path[path.length - 1]] = mutations[keys[i]];
+            let obj = root._jsonMirror;
+            if (!obj || Object.keys(obj).length === 0) {
+                console.warn("[Config] mirror is empty, skipping write");
+                root._writeInFlight = false;
+                return;
             }
-
-            // Re-inject custom widget data
+            // Inject custom widget data
             if (root._hasObjectKeys(root.customWidgetData)) {
                 if (!obj.background) obj.background = {};
                 if (!obj.background.widgets) obj.background.widgets = {};
                 obj.background.widgets.custom = root.customWidgetData;
             }
-
             const newText = JSON.stringify(obj, null, 4);
-            if (newText === currentText && keys.length === 0) {
-                root._writeInFlight = false;
-                if (root._pendingWrite) {
-                    root._pendingWrite = false;
-                    fileWriteTimer.restart();
-                }
-                return;
-            }
-            writeFlightGuard.restart();
             configFileView.setText(newText);
+            // setText is synchronous — file is written when it returns.
+            // Don't wait for onSaved which may not fire reliably in QS 0.3.
+            root._writeInFlight = false;
+            if (root._pendingCustomInject) {
+                root._pendingCustomInject = false;
+                customInjectTimer.restart();
+            } else if (root._pendingWrite) {
+                root._pendingWrite = false;
+                fileWriteTimer.restart();
+            }
         } catch (e) {
-            console.warn("[Config] _writeDirectFromAdapter failed:", e.message);
+            console.warn("[Config] write failed:", e.message);
             root._writeInFlight = false;
         }
     }
@@ -285,16 +278,13 @@ Singleton {
             ? root._customSnapshotForInject : root.customWidgetData;
         if (!root._hasObjectKeys(customData)) return;
         try {
-            const text = configFileView.text();
-            if (!text) return;
-            const obj = JSON.parse(text);
-            if (!obj.background) obj.background = {};
-            if (!obj.background.widgets) obj.background.widgets = {};
-            obj.background.widgets.custom = customData;
+            if (!root._jsonMirror.background) root._jsonMirror.background = {};
+            if (!root._jsonMirror.background.widgets) root._jsonMirror.background.widgets = {};
+            root._jsonMirror.background.widgets.custom = customData;
             root.customWidgetData = root._cloneObject(customData);
             root._customSnapshotForInject = ({});
             root._writeInFlight = true;
-            configFileView.setText(JSON.stringify(obj, null, 4));
+            configFileView.setText(JSON.stringify(root._jsonMirror, null, 4));
         } catch (e) { root._writeInFlight = false; }
     }
 
@@ -318,6 +308,10 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
+            if (!root.ready) {
+                root._pendingWrite = true;
+                return;
+            }
             if (root._writeInFlight) {
                 root._pendingWrite = true;
                 return;
@@ -330,19 +324,14 @@ Singleton {
         }
     }
 
-    // Safety: if onSaved never fires, unstick _writeInFlight so future writes pass.
+    // Safety: if _writeInFlight gets stuck somehow, unstick after timeout.
     Timer {
         id: writeFlightGuard
-        interval: 1000
+        interval: 2000
         repeat: false
         onTriggered: {
             if (root._writeInFlight) {
-                console.warn("[Config] write did not complete within 1s — unsticking write lock");
                 root._writeInFlight = false;
-                if (root._pendingWrite) {
-                    root._pendingWrite = false;
-                    fileWriteTimer.restart();
-                }
             }
         }
     }
@@ -367,25 +356,17 @@ Singleton {
         blockWrites: root.blockWrites
         onFileChanged: fileReloadTimer.restart()
         onSaved: {
+            // setText is treated as synchronous — _writeInFlight is cleared immediately
+            // after setText returns. onSaved is kept for compatibility but no logic depends on it.
             writeFlightGuard.stop();
-            root._writeInFlight = false;
-            if (root._pendingCustomInject) {
-                root._pendingCustomInject = false;
-                customInjectTimer.restart();
-                return; // inject starts another write, wait for its onSaved
-            }
-            if (root._pendingWrite) {
-                root._pendingWrite = false;
-                fileWriteTimer.restart();
-                return; // write takes priority — reload after next onSaved
-            }
-            // Write cycle done — run any deferred reload
-            if (root._pendingReload) {
-                root._pendingReload = false;
-                fileReloadTimer.restart();
-            }
         }
         onLoaded: {
+            // Initialize the in-memory JSON mirror from disk
+            try {
+                root._jsonMirror = JSON.parse(configFileView.text());
+            } catch (e) {
+                root._jsonMirror = {};
+            }
             // Workaround: JsonAdapter doesn't populate property var inside nested JsonObjects.
             // Manually sync custom widget data from the raw JSON.
             root._syncVarProperties();
