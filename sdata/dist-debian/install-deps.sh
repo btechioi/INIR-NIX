@@ -71,6 +71,9 @@ if [[ -n "${ONLY_MISSING_DEPS:-}" ]]; then
     [wl-copy]="wl-clipboard"
     [wl-paste]="wl-clipboard"
     [fuzzel]="fuzzel"
+    [gum]="gum"
+    [hyprpicker]="hyprpicker"
+    [xwayland-satellite]="xwayland-satellite"
     [missioncenter]="io.missioncenter.MissionCenter"
   )
 
