@@ -165,14 +165,15 @@ bind "Super+Alt+L" allow-when-locked=true { spawn "inir" "lock" "activate"; }
 
 ### memory
 
-Memory pressure monitoring. Self-healing for JSGCHeap accumulation (Qt V4 memfd leak).
+Memory pressure monitoring for JSGCHeap accumulation (Qt V4 memfd leak). Notifies user when memory is high, lets them decide when to restart.
 
 | Function | Description |
 |----------|-------------|
-| `stats` | Return JSON with deleted mappings count, threshold, and reload state |
+| `stats` | Return JSON with deleted mappings count, threshold, and state |
 | `collect` | Force JavaScript garbage collection |
-| `reload` | Schedule automatic restart when threshold exceeded |
-| `cancel` | Cancel scheduled restart |
+| `restart` | Restart the shell to free accumulated memory |
+| `dismiss` | Dismiss the memory warning notification |
+| `reset` | Reset notification state (re-enables warnings) |
 
 ---
 

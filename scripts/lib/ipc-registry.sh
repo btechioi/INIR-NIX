@@ -2,7 +2,7 @@
 # Auto-generated from QML IpcHandler declarations + docs/IPC.md metadata.
 # Do not edit manually.
 # Regenerate: python3 scripts/lib/generate-ipc-registry.py
-# IPC.md hash: 981051cbd0e6b05a
+# IPC.md hash: d485625a3a77485d
 # Targets: 49
 
 declare -gA IPC_TARGET_DESC=(
@@ -25,7 +25,7 @@ declare -gA IPC_TARGET_DESC=(
   [keyboard]="Keyboard layout switching (Niri only). Cycles through configured keyboard layouts and queries layout info."
   [lock]="Lock screen. For when you need to pretend you're working."
   [mediaControls]="Floating media controls panel."
-  [memory]="Memory pressure monitoring. Self-healing for JSGCHeap accumulation (Qt V4 memfd leak)."
+  [memory]="Memory pressure monitoring for JSGCHeap accumulation (Qt V4 memfd leak). Notifies user when memory is high, lets them decide when to restart."
   [minimize]="Window minimization (Niri workaround - moves windows to hidden workspace)."
   [mpris]="Media player control. Automatically detects and uses YtMusic controls when active, otherwise uses the active MPRIS player."
   [notifications]="Notification management."
@@ -129,7 +129,7 @@ declare -gA IPC_TARGET_FUNCTIONS=(
   [keyboard]="switchLayout switchLayoutPrevious getCurrentLayout getLayouts"
   [lock]="activate deactivate status focus"
   [mediaControls]="toggle close open"
-  [memory]="collect stats reload cancel"
+  [memory]="collect stats restart dismiss reset"
   [minimize]="minimize restore"
   [mpris]="pauseAll playPause previous next"
   [notifications]="test clearAll toggleSilent"
@@ -225,9 +225,10 @@ declare -gA IPC_FUNCTION_DESC=(
   ["mediaControls:close"]="Hide media controls"
   ["mediaControls:open"]="Show media controls"
   ["memory:collect"]="Force JavaScript garbage collection"
-  ["memory:stats"]="Return JSON with deleted mappings count, threshold, and reload state"
-  ["memory:reload"]="Schedule automatic restart when threshold exceeded"
-  ["memory:cancel"]="Cancel scheduled restart"
+  ["memory:stats"]="Return JSON with deleted mappings count, threshold, and state"
+  ["memory:restart"]="Restart the shell to free accumulated memory"
+  ["memory:dismiss"]="Dismiss the memory warning notification"
+  ["memory:reset"]="Reset notification state (re-enables warnings)"
   ["minimize:minimize"]="Minimize focused window"
   ["minimize:restore"]="Restore a minimized window by ID"
   ["mpris:pauseAll"]="Pause all players"
