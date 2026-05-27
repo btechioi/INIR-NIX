@@ -5,6 +5,50 @@ All notable changes to iNiR will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.25.2] - 2026-05-27
+
+Performance and polish release. Boot time dropped ~31% (QML parsing 2.83s → 1.95s) by splitting `qs.services` into core + deferred modules and deferring 17 singletons past the first frame. The shell now auto-dims when power saving kicks in, launched apps stop showing up as "inir" in task managers, and most UI transitions got the organic morphing treatment — nothing pops in or out anymore.
+
+### Added
+- **MemoryPressureService** *(#164)*: self-healing garbage collection for the JSGC heap leak. Monitors RSS at 5-minute intervals, triggers a `gc()` sweep when growth exceeds 40 MB between samples, and notifies the user instead of auto-restarting — they decide when to restart. IPC target `memory` for external integration.
+- **Shell desaturation effect**: new `Appearance.shellDesaturation` token (0.0–1.0) that applies a configurable grayscale effect to all shell panels. Desktop widgets show a visual desaturation when paused by the power manager, so the user can tell at a glance which surfaces are sleeping.
+- **Widget power management**: desktop widgets now pause expensive operations (blur, cava, animations) when compositor windows overlap them. New Settings → Power Saving section in both families lets users control the behavior. WidgetSurface blur layer is gated on visibility to skip offscreen FBO passes entirely.
+- **Boot greeting screen**: a short branded splash on first frame while deferred services load in the background. Fades out once Tier 2 services are ready.
+- **Shared CavaService** *(#160)*: single cava process shared across all visualizer widgets instead of spawning one per widget. Gated on playback state — process only runs when music is actually playing. Drops expensive bitmap fonts from the cava config.
+- **App process scoping** *(#167)*: all apps launched from the shell (`ShellExec`, `AppLauncher`, setup recipes, overlay actions) now run inside their own `systemd-run --user --scope` unit. Mission Center, `systemd-cgls`, and other process inspectors correctly attribute them instead of lumping everything under `inir.service`.
+- **Centralized monitor visibility** *(#154)*: Settings → Modules now has a unified panel for enabling/disabling shell surfaces per monitor. Replaces the scattered per-panel visibility toggles.
+- **Niri xdg-activation focus-stealing fix**: migration 027 adds `debug { honor-xdg-activation-with-invalid-serial }` to the niri config, fixing focus not transferring to newly launched apps. Also baked into defaults for fresh installs.
+- **Split desktop entries**: `inir.desktop` split into separate entries for the shell session and the standalone settings window, so app launchers show both options.
+
+### Changed
+- **Boot pipeline**: services split into `qs.services` (61 core singletons — loaded immediately) and `qs.services.deferred` (17 singletons — loaded after first frame). Panel loading uses `source:` + `activeAsync:` instead of blocking `active:`, and four tiers (T0 core, T+0 panels, T+500ms deferred, T+1500ms late) replace the old two-phase boot. Net: QML parsing from 2.83s to ~1.95s, total boot from ~3.2s to ~2.77s.
+- **Settings UI redesign**: category nav rail with animated selection indicator, directional page transitions (slide left/right based on navigation direction), search field morphs into results view, no-results state uses a pill instead of blank space, loading states morph into content.
+- **Organic morphing pass**: overview entrance/exit uses opacity + scale + translate instead of instant show/hide. Alt-switcher active indicators animate between positions. Selection chips, dock dots, taskbar indicators, and the clock hour hand all use squish morphing. Family transitions are now continuous — no frames where both families are visible simultaneously.
+- **Wallpaper blur gating**: blur layer is now disabled entirely when the wallpaper is hidden behind fullscreen windows, and the QML blur pass is skipped when the compositor already provides equivalent blurring. Saves ~30 MB VRAM on average.
+- **VRAM reductions**: blur downsampling factor increased, unused FBO passes eliminated, WidgetSurface blur layer only allocates when both visible and enabled.
+- **ABI mismatch handling**: in service mode, the shell now attempts a noninteractive rebuild before failing, and shows manual instructions when sudo isn't available. Conflicting packages are removed before quickshell-git installs. Doctor shows full build progress during interactive ABI rebuilds.
+- **Distribution**: Fedora 44+ and Debian package lists updated. Arch `awww` package name corrected. `millennium-bin` moved to optdepends on the dist path too (already done for inir-shell in 2.25.1).
+
+### Fixed
+- **GTK4 theme parser warnings** *(#170)*: CSS generation now uses `@define-color` custom properties instead of inline color functions. Removed `!important` declarations and `alpha()` calls that GTK4's parser doesn't support — no more `Broken CSS` warnings in the journal.
+- **Clock second hand missing** *(#166)*: `secondPrecision` was a gate for the smooth-sweep animation, not for showing the second hand at all. The hand now always renders when the clock style includes it; `secondPrecision` only controls whether it ticks or sweeps. Bar digital clock no longer shows `:ss` when seconds display is off.
+- **Launcher apps rendering blurry**: `GDK_SCALE`, `QT_SCALE_FACTOR`, and related DPI environment variables are now unset before launching child processes. They were inherited from the shell's own scaling and caused apps to double-scale.
+- **Clipboard layout jump on hover**: hovering a clipboard entry caused a layout reflow from the action buttons appearing. Now uses opacity transition without changing dimensions.
+- **Screenshot Esc key scope**: pressing Escape while in the region selector now only closes the screenshot UI, not unrelated background panels that were listening on the same key.
+- **Image search broken**: migrated from defunct SauceNAO endpoints to Bing visual search, fixed curl quoting for URLs with special characters, added upload endpoint rotation for reliability.
+- **Lock screen memory** *(#163)*: waffle lock surface images now set `cache: false`, preventing Qt from accumulating texture copies across lock/unlock cycles.
+- **JSGC pressure**: reduced garbage generation in lock screen, clipboard history, and settings overlay by avoiding unnecessary property re-evaluations and gating timers.
+- **Orphaned helper processes**: `inir stop` and service restarts now send SIGTERM to child processes (cava, awww, etc.) that outlived their parent scope. `inir doctor --perf` extended with orphan detection.
+- **awww daemon lifecycle**: health check switched from socket probe to a lightweight query, daemon started per-display in its own systemd scope instead of a single shared instance.
+- **Persistent storage first-run**: `mkdir` for the persistent state directory now uses `Process.execDetached()` instead of blocking the shell on first launch.
+- **Duplicate Mod+Shift+L keybind** *(#151)*: lock and layout-cycle were both bound to the same combo. Layout-cycle moved to a non-conflicting keybind.
+- **GTK CSS `!important` and `alpha()`**: removed invalid CSS constructs from the generated GTK3/4 stylesheets that triggered parser warnings in GTK4 apps.
+
+### Issues
+- Fixes [#166](https://github.com/snowarch/iNiR/issues/166), [#170](https://github.com/snowarch/iNiR/issues/170).
+- Addresses [#160](https://github.com/snowarch/iNiR/issues/160), [#163](https://github.com/snowarch/iNiR/issues/163), [#164](https://github.com/snowarch/iNiR/issues/164), [#167](https://github.com/snowarch/iNiR/issues/167).
+- Resolves [#151](https://github.com/snowarch/iNiR/issues/151), [#154](https://github.com/snowarch/iNiR/issues/154).
+
 ## [2.25.1] - 2026-05-20
 
 Quickshell 0.3 + Qt 6.11.1 compatibility release. Fixes the #1 regression (settings not persisting) and several related issues surfaced by the update.
