@@ -2405,13 +2405,16 @@ run_update() {
         cp -f "${REPO_ROOT}/assets/icons/desktop-symbolic.svg" "${icon_target_dir}/inir.svg"
     fi
 
+    local applications_dir="${XDG_DATA_HOME}/applications"
+    mkdir -p "$applications_dir"
     if [[ -f "${REPO_ROOT}/assets/applications/inir.desktop" ]]; then
-        local applications_dir="${XDG_DATA_HOME}/applications"
-        local desktop_tmp="${XDG_CACHE_HOME}/inir.desktop.$$"
-        mkdir -p "$applications_dir"
-        sed "s|^Exec=.*|Exec=${launcher_target//&/\\&} settings|" "${REPO_ROOT}/assets/applications/inir.desktop" > "$desktop_tmp"
-        cp -f "$desktop_tmp" "${applications_dir}/inir.desktop"
-        rm -f "$desktop_tmp"
+        cp -f "${REPO_ROOT}/assets/applications/inir.desktop" "${applications_dir}/inir.desktop"
+    fi
+    if [[ -f "${REPO_ROOT}/assets/applications/inir-settings.desktop" ]]; then
+        local settings_tmp="${XDG_CACHE_HOME}/inir-settings.desktop.$$"
+        sed "s|^Exec=.*|Exec=${launcher_target//&/\\&} settings|" "${REPO_ROOT}/assets/applications/inir-settings.desktop" > "$settings_tmp"
+        cp -f "$settings_tmp" "${applications_dir}/inir-settings.desktop"
+        rm -f "$settings_tmp"
     fi
 
     # Update version

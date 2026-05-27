@@ -53,6 +53,7 @@ install-icon:
 
 install-desktop:
 	@install -Dm644 assets/applications/inir.desktop $(APPLICATIONS_DIR)/inir.desktop
+	@install -Dm644 assets/applications/inir-settings.desktop $(APPLICATIONS_DIR)/inir-settings.desktop
 	@update-desktop-database -q $(APPLICATIONS_DIR) 2>/dev/null || true
 
 install-docs:
@@ -76,7 +77,7 @@ uninstall-icon:
 	@gtk-update-icon-cache -q $(SHAREDIR)/icons/hicolor 2>/dev/null || true
 
 uninstall-desktop:
-	@rm -f $(APPLICATIONS_DIR)/inir.desktop
+	@rm -f $(APPLICATIONS_DIR)/inir.desktop $(APPLICATIONS_DIR)/inir-settings.desktop
 	@update-desktop-database -q $(APPLICATIONS_DIR) 2>/dev/null || true
 
 uninstall-docs:
