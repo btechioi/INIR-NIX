@@ -64,6 +64,10 @@ let
     fuzzelIni = builtins.pathExists ../../defaults/fuzzel/fuzzel.ini;
     gtk3Settings = builtins.pathExists ../../defaults/gtk-3.0/settings.ini;
     gtk4Settings = builtins.pathExists ../../defaults/gtk-4.0/settings.ini;
+    darklyrc = builtins.pathExists ../../dots/.config/darklyrc;
+    konsolerc = builtins.pathExists ../../dots/.config/konsolerc;
+    dolphinstaterc = builtins.pathExists ../../defaults/kde/dolphinstaterc;
+    aiPrompts = builtins.pathExists ../../defaults/ai;
   };
 
   # Assert all sources exist

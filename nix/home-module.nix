@@ -171,8 +171,12 @@ in {
 
     # Runtime QML payload symlink — makes the shell runtime available
     # at the path Quickshell expects (~/.config/quickshell/inir)
-    home.file.".config/quickshell/inir" = {
-      source = "${inirPkg}/share/quickshell/inir";
+    home.file = {
+      ".config/quickshell/inir" = {
+        source = "${inirPkg}/share/quickshell/inir";
+      };
+      # Dolphin panel layout state (installed to XDG_STATE_HOME per upstream)
+      ".local/state/dolphinstaterc".source = ./../defaults/kde/dolphinstaterc;
     };
 
     # Home Manager config files (single merge to avoid infinite recursion)
@@ -226,6 +230,10 @@ in {
         "fuzzel/fuzzel.ini".source = ./../defaults/fuzzel/fuzzel.ini;
         "gtk-3.0/settings.ini".source = ./../defaults/gtk-3.0/settings.ini;
         "gtk-4.0/settings.ini".source = ./../defaults/gtk-4.0/settings.ini;
+        "darklyrc".source = ./../dots/.config/darklyrc;
+        "konsolerc".source = ./../dots/.config/konsolerc;
+        # AI chat prompts for the sidebar AI feature
+        "illogical-impulse/ai".source = ./../defaults/ai;
       }
     ];
 
