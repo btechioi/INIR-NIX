@@ -287,6 +287,7 @@ Loader {
         PanelWindow {
             id: clickOutsideBackdrop
             visible: popupWindow.visible && CompositorService.isNiri && root.closeOnFocusLost
+            screen: root.anchorItem?.QsWindow?.window?.screen ?? GlobalStates.primaryScreen
             color: "transparent"
             exclusiveZone: 0
             WlrLayershell.layer: WlrLayer.Top

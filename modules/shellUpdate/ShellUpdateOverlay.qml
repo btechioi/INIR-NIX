@@ -15,6 +15,18 @@ import Quickshell.Services.Notifications
 Scope {
     id: root
 
+    readonly property var _focusedScreen: {
+        if (CompositorService.isNiri && typeof NiriService !== "undefined" && NiriService.currentOutput) {
+            const s = Quickshell.screens.find(scr => scr?.name === NiriService.currentOutput)
+            if (s) return s
+        }
+        if (Hyprland.focusedMonitor?.name) {
+            const s = Quickshell.screens.find(scr => scr?.name === Hyprland.focusedMonitor.name)
+            if (s) return s
+        }
+        return GlobalStates.primaryScreen
+    }
+
     readonly property bool isOpen: ShellUpdates.overlayOpen
     readonly property bool hasUpdate: ShellUpdates.hasUpdate
     readonly property bool hasLocalMods: ShellUpdates.localModifications.length > 0
@@ -125,6 +137,7 @@ Scope {
 
     PanelWindow {
         id: window
+        screen: root._focusedScreen
         visible: root.isOpen
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"

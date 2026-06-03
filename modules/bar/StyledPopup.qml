@@ -31,6 +31,7 @@ LazyLoader {
     PanelWindow {
         id: clickOutsideBackdrop
         visible: root.active && root.closeOnOutsideClick
+        screen: root.hoverTarget?.QsWindow?.window?.screen ?? GlobalStates.primaryScreen
         color: Qt.rgba(0, 0, 0, 1/255)
         exclusiveZone: 0
         WlrLayershell.layer: WlrLayer.Overlay
@@ -46,6 +47,7 @@ LazyLoader {
 
     component: PanelWindow {
         id: popupWindow
+        screen: root.hoverTarget?.QsWindow?.window?.screen ?? GlobalStates.primaryScreen
         color: "transparent"
 
         HoverHandler {

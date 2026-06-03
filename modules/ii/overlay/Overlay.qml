@@ -69,6 +69,7 @@ Scope {
             // Visible when overlay is open OR when there are pinned widgets to show
             visible: GlobalStates.overlayOpen || OverlayContext.hasPinnedWidgets
             exclusionMode: ExclusionMode.Ignore
+            screen: root.targetScreen ?? GlobalStates.primaryScreen
             WlrLayershell.namespace: "quickshell:overlay"
             WlrLayershell.layer: WlrLayer.Overlay
             // Exclusive focus when open; OnDemand for pinned clickable widgets when closed;

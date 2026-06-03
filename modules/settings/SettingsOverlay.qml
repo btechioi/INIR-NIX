@@ -20,6 +20,18 @@ import qs.modules.common.functions as CF
 Scope {
     id: root
 
+    readonly property var _focusedScreen: {
+        if (CompositorService.isNiri && typeof NiriService !== "undefined" && NiriService.currentOutput) {
+            const s = Quickshell.screens.find(scr => scr?.name === NiriService.currentOutput)
+            if (s) return s
+        }
+        if (Hyprland.focusedMonitor?.name) {
+            const s = Quickshell.screens.find(scr => scr?.name === Hyprland.focusedMonitor.name)
+            if (s) return s
+        }
+        return GlobalStates.primaryScreen
+    }
+
     property bool settingsOpen: GlobalStates.settingsOverlayOpen ?? false
 
     // Keep the overlay tree unloaded while closed; search can request preload on demand.
@@ -528,6 +540,7 @@ Scope {
 
         sourceComponent: PanelWindow {
             id: settingsPanel
+            screen: root._focusedScreen
 
             visible: GlobalStates.settingsOverlayOpen ?? false
 

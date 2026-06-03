@@ -50,6 +50,7 @@ PopupWindow {
     PanelWindow {
         id: clickOutsideBackdrop
         visible: root.visible && CompositorService.isNiri
+        screen: root.trayItemMenuHandle?.QsWindow?.window?.screen ?? GlobalStates.primaryScreen
         color: "transparent"
         exclusiveZone: 0
         WlrLayershell.layer: WlrLayer.Top

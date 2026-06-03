@@ -12,6 +12,19 @@ import Quickshell.Hyprland
 
 Scope {
     id: root
+
+    readonly property var _focusedScreen: {
+        if (CompositorService.isNiri && typeof NiriService !== "undefined" && NiriService.currentOutput) {
+            const s = Quickshell.screens.find(scr => scr?.name === NiriService.currentOutput)
+            if (s) return s
+        }
+        if (Hyprland.focusedMonitor?.name) {
+            const s = Quickshell.screens.find(scr => scr?.name === Hyprland.focusedMonitor.name)
+            if (s) return s
+        }
+        return GlobalStates.primaryScreen
+    }
+
     property var pages: [
         {
             "icon": "keyboard",
@@ -67,6 +80,7 @@ Scope {
 
     PanelWindow {
         id: window
+        screen: root._focusedScreen
 
         Component.onCompleted: visible = root.cheatsheetOpen
 

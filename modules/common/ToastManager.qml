@@ -8,7 +8,19 @@ import qs.services
 
 Scope {
     id: root
-    
+
+    readonly property var _focusedScreen: {
+        if (CompositorService.isNiri && typeof NiriService !== "undefined" && NiriService.currentOutput) {
+            const s = Quickshell.screens.find(scr => scr?.name === NiriService.currentOutput)
+            if (s) return s
+        }
+        if (Hyprland.focusedMonitor?.name) {
+            const s = Quickshell.screens.find(scr => scr?.name === Hyprland.focusedMonitor.name)
+            if (s) return s
+        }
+        return GlobalStates.primaryScreen
+    }
+
     // Toast queue
     property var toasts: []
     property int maxToasts: 5
@@ -194,6 +206,7 @@ Scope {
         
         PanelWindow {
             id: popup
+            screen: root._focusedScreen
             visible: root.toasts.length > 0 && !root.suppressOnScreenToasts
             exclusiveZone: 0
             anchors.top: true

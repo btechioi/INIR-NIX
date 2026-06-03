@@ -92,6 +92,7 @@ Scope {
 
     PanelWindow {
         id: wizardPanel
+        screen: root.focusedScreen
         visible: true
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
