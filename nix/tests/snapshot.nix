@@ -45,10 +45,38 @@ let
     bind Mod + Q { action="close-window"; }
   '';
 
+  # Dotfile source existence checks — verify all source paths resolve
+  dotfileSources = {
+    fishConfig = builtins.pathExists ../../dots/.config/fish/config.fish;
+    fishAutoNiri = builtins.pathExists ../../dots/.config/fish/auto-Niri.fish;
+    mpvConf = builtins.pathExists ../../dots/.config/mpv/mpv.conf;
+    kvantumConfig = builtins.pathExists ../../dots/.config/Kvantum/kvantum.kvconfig;
+    fontconfigConf = builtins.pathExists ../../dots/.config/fontconfig/fonts.conf;
+    chromeFlags = builtins.pathExists ../../dots/.config/chrome-flags.conf;
+    codeFlags = builtins.pathExists ../../dots/.config/code-flags.conf;
+    vesktopThemes = builtins.pathExists ../../dots/.config/vesktop/themes;
+    matugenDir = builtins.pathExists ../../dots/.config/matugen;
+    portalsConf = builtins.pathExists ../../dots/.config/xdg-desktop-portal/niri-portals.conf;
+    kdeglobals = builtins.pathExists ../../defaults/kde/kdeglobals;
+    dolphinrc = builtins.pathExists ../../defaults/kde/dolphinrc;
+    kservicemenurc = builtins.pathExists ../../defaults/kde/kservicemenurc;
+    starshipToml = builtins.pathExists ../../defaults/starship/starship.toml;
+    fuzzelIni = builtins.pathExists ../../defaults/fuzzel/fuzzel.ini;
+    gtk3Settings = builtins.pathExists ../../defaults/gtk-3.0/settings.ini;
+    gtk4Settings = builtins.pathExists ../../defaults/gtk-4.0/settings.ini;
+  };
+
+  # Assert all sources exist
+  dotfilesAllExist = lib.all (x: x) (builtins.attrValues dotfileSources);
+
 in {
   niriConfigGenerated = generatedNiriKDL;
   niriConfigExpected = expectedNiriKDL;
   niriConfigMatch = builtins.match (builtins.replaceStrings [" "] [" "] generatedNiriKDL) (builtins.replaceStrings [" "] [" "] expectedNiriKDL);
   # For a real test, use a proper assertion:
   # niriConfigPass = assert (generatedNiriKDL == expectedNiriKDL); true;
+
+  # Dotfile source verification
+  inherit dotfileSources;
+  dotfilesAllExist = assert dotfilesAllExist; true;
 }
