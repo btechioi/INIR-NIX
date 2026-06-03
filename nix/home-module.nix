@@ -78,7 +78,7 @@ in {
 
     browser = lib.mkOption {
       type = lib.types.str;
-      default = "firefox";
+      default = "chromium";
       example = "chromium";
       description = "Default web browser";
     };
