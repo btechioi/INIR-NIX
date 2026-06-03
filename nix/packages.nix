@@ -14,7 +14,7 @@ in rec {
     quickshellPkg qt6.qtdeclarative qt6.qtbase qt6.qtsvg
     qt6.qtwayland qt6.qtmultimedia qt6.qtpositioning
     qt6.qtvirtualkeyboard kdePackages.kirigami
-    libsForQt5.plasma-integration
+    kdePackages.plasma-integration
     breeze-icons
   ];
 
