@@ -794,6 +794,30 @@ ContentPage {
                     text: Translation.tr("Keep the quick settings panel in memory to reduce opening delay")
                 }
             }
+
+            ContentSubsection {
+                title: Translation.tr("Animation Speed")
+                tooltip: Translation.tr("Controls how fast all shell animations play. Higher = snappier.")
+
+                ConfigSpinBox {
+                    icon: "speed"
+                    text: Translation.tr("Animation speed multiplier")
+                    from: 0.5
+                    to: 2.0
+                    stepSize: 0.1
+                    decimals: 1
+                    value: Config.options?.appearance?.animationSpeed ?? 1.0
+                    onValueChanged: {
+                        Config.setNestedValue("appearance.animationSpeed", value);
+                    }
+                    StyledToolTip {
+                        text: Translation.tr("Multiplier for all animation durations. 1.0 = normal, 2.0 = 2x faster, 0.5 = 2x slower. Extreme values (0.25-4.0) can be set via JSON config file.")
+                    }
+                }
+            }
+
+        }
+            }
         }
     }
 
@@ -884,6 +908,16 @@ ContentPage {
                         if (index >= 0 && index < animOptions.length)
                             Config.setNestedValue("sidebar.animationType", animOptions[index].value)
                     }
+                }
+            }
+
+            SettingsSwitch {
+                buttonIcon: "animation"
+                text: Translation.tr("Scale overshoot animation")
+                checked: Config.options?.sidebar?.scaleAnimation ?? true
+                onCheckedChanged: Config.setNestedValue("sidebar.scaleAnimation", checked)
+                StyledToolTip {
+                    text: Translation.tr("Enable the elastic scale bounce when opening the sidebar. Disable for a simpler slide-in effect.")
                 }
             }
 

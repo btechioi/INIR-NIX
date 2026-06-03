@@ -88,6 +88,13 @@ Singleton {
     // Master switches for effects and animations
     property bool effectsEnabled: !Config.options?.performance?.lowPower && !_gameModeDisablesEffects
     property bool animationsEnabled: !_gameModeDisablesAnimations && !(Config.options?.performance?.reduceAnimations ?? false)
+    // Animation speed multiplier (0.25-4.0, clamped to valid range)
+    // Default 1.0 = normal speed, 2.0 = 2x faster, 0.5 = 2x slower
+    property real animationSpeed: {
+        const v = Config.options?.appearance?.animationSpeed
+        if (typeof v === 'number' && v >= 0.25 && v <= 4) return v
+        return 1.0
+    }
     // Set to true when the compositor is already blurring the window surface so
     // panels can skip their own QML MultiEffect blur (avoids double-blur and FBO cost).
     // Currently always false on Niri (no compositor blur); Hyprland hook TBD (ref #159).
@@ -130,8 +137,11 @@ Singleton {
     onAnimationsEnabledChanged: if (Qt.application.arguments.indexOf("--debug") !== -1) console.log("[Appearance] animationsEnabled:", animationsEnabled)
 
     // Helper for calculating effective animation duration
+    // When animations disabled: returns 0 (snap instantly)
+    // When enabled: divides base by speed multiplier (minimum 1ms)
     function calcEffectiveDuration(baseDuration) {
-        return animationsEnabled ? baseDuration : 0
+        if (!animationsEnabled) return 0
+        return Math.max(1, Math.round(baseDuration / root.animationSpeed))
     }
 
     m3colors: QtObject {

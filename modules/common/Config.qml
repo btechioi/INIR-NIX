@@ -691,6 +691,7 @@ Singleton {
                     property bool overlays: true
                     property bool popups: true
                 }
+                property real animationSpeed: 1.0
             }
 
             property JsonObject performance: JsonObject {
@@ -1665,6 +1666,7 @@ Singleton {
                 property bool instantOpen: false
                 property string animationType: "slide" // "slide" | "fade" | "pop" | "reveal"
                 property bool openFolderOnDownload: false // Open file manager after wallpaper download
+                property bool scaleAnimation: true
                 property JsonObject translator: JsonObject {
                     property bool enable: true
                     property int delay: 300 // Delay before sending request. Reduces (potential) rate limits and lag.

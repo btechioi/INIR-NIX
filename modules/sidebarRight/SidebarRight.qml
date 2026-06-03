@@ -248,6 +248,7 @@ Scope {
                             easing.bezierCurve: Appearance.animationCurves?.standardDecel ?? [0, 0, 0, 1, 1, 1]
                         }
                         SequentialAnimation {
+                            enabled: Config.options?.sidebar?.scaleAnimation ?? true
                             NumberAnimation {
                                 target: sidebarContentLoader; property: "animScale"
                                 from: root.animationType === "elastic" ? 0.88
