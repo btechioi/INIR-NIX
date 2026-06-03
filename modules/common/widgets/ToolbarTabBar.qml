@@ -12,8 +12,19 @@ Item {
     property alias currentIndex: tabBar.currentIndex
     required property var tabButtonList
     property real maxWidth: -1
-    property int compactThreshold: 4
+    property int compactThreshold: 0
     readonly property bool compactMode: (root.tabButtonList?.length ?? 0) >= root.compactThreshold
+    readonly property real compactFactor: {
+        const count = root.tabButtonList?.length ?? 0
+        if (count <= 0) return 1.0
+        const avail = root.maxWidth > 0 ? root.maxWidth : width
+        if (avail <= 0) return 1.0
+        const unscaledOverhead = (count - 1) * 4 + 8
+        const neededForTabs = avail - unscaledOverhead
+        if (neededForTabs <= 0) return 0.01
+        const tabBase = 42
+        return Math.min(1.0, neededForTabs / (count * tabBase))
+    }
 
     function ensureCurrentVisible() {
         if (!flick.interactive) return;
@@ -132,7 +143,8 @@ Item {
                             required property int index
                             required property var modelData
                             current: index == root.currentIndex
-                            showLabel: !root.compactMode || current
+                            showLabel: (!root.compactMode || current) && root.compactFactor >= 1.0
+                            compactFactor: root.compactFactor
                             text: modelData.name
                             materialSymbol: modelData.icon
                             onClicked: {

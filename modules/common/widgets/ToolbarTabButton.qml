@@ -11,7 +11,8 @@ RippleButton {
     required property string materialSymbol
     required property bool current
     property bool showLabel: true
-    horizontalPadding: 10
+    property real compactFactor: 1.0
+    horizontalPadding: Math.max(4, Math.floor(10 * root.compactFactor))
 
     implicitHeight: (Appearance.inirEverywhere || Appearance.angelEverywhere) ? 32 : 40
     readonly property real _iconOnlyImplicitWidth: icon.implicitWidth + horizontalPadding * 2
@@ -32,7 +33,7 @@ RippleButton {
     contentItem: Row {
         id: contentRow
         anchors.centerIn: parent
-        spacing: root.showLabel ? 6 : 0
+        spacing: root.showLabel ? Math.max(2, Math.floor(6 * root.compactFactor)) : 0
 
         Behavior on spacing {
             enabled: Appearance.animationsEnabled
@@ -42,7 +43,7 @@ RippleButton {
         MaterialSymbol {
             id: icon
             anchors.verticalCenter: parent.verticalCenter
-            iconSize: 22
+            iconSize: Math.max(12, Math.floor(22 * root.compactFactor))
             text: root.materialSymbol
             color: Appearance.angelEverywhere
                 ? (root.current ? Appearance.angel.colOnPrimary : Appearance.angel.colText)

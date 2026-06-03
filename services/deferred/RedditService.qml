@@ -1,7 +1,9 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import qs.modules.common
 import qs.services
 import "root:"
@@ -33,15 +35,55 @@ Singleton {
     
     // Config - use function to always get fresh value
     readonly property var defaultSubreddits: ["unixporn", "linux", "archlinux", "kde", "gnome"]
+
+    // Cookie file for Cloudflare bypass (export cookies from browser)
+    readonly property string _cookieFile: Config.options?.services?.reddit?.cookieFile
+        ?? Directories.shellConfig + "/services/deferred/reddit_cookies.txt"
+
+    property var _pendingCallbacks: []
+    property Process _proc: Process {
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const cb = root._pendingCallbacks.shift()
+                if (!cb) return
+                root._canRequest = true
+                if (text.length === 0) {
+                    cb(null, "Empty response")
+                    return
+                }
+                try {
+                    const response = JSON.parse(text)
+                    cb(response.data?.children ?? [], null)
+                } catch (e) {
+                    cb(null, "Parse error")
+                }
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0 && root._pendingCallbacks.length > 0) {
+                    const cb = root._pendingCallbacks.shift()
+                    root._canRequest = true
+                    cb(null, text.trim())
+                }
+            }
+        }
+    }
+
+    Timer {
+        id: _timeoutTimer
+        interval: 20000
+        onTriggered: {
+            if (root._pendingCallbacks.length > 0) {
+                const cb = root._pendingCallbacks.shift()
+                root._canRequest = true
+                if (cb) cb(null, "Request timed out")
+            }
+        }
+    }
     
     function getSubreddits() {
         return Config.options?.sidebar?.reddit?.subreddits ?? root.defaultSubreddits
-    }
-    
-    Timer {
-        id: rateLimitTimer
-        interval: root.requestDelay
-        onTriggered: root._canRequest = true
     }
     
     function _makeRequest(url, callback) {
@@ -51,30 +93,20 @@ Singleton {
         }
         
         root._canRequest = false
-        rateLimitTimer.start()
-        
-        const xhr = new XMLHttpRequest()
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                if (xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText)
-                        callback(response.data?.children ?? [], null)
-                    } catch (e) {
-                        callback(null, "Parse error: " + e.message)
-                    }
-                } else if (xhr.status === 429) {
-                    root.lastError = "Rate limited, retrying..."
-                    rateLimitTimer.interval = 2000
-                    Qt.callLater(() => root._makeRequest(url, callback))
-                } else {
-                    callback(null, "HTTP " + xhr.status)
-                }
-            }
-        }
-        xhr.open("GET", url)
-        xhr.setRequestHeader("User-Agent", Config.options?.networking?.userAgent ?? "Mozilla/5.0")
-        xhr.send()
+        root._pendingCallbacks.push(callback)
+        _timeoutTimer.restart()
+
+        const ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+        root._proc.command = [
+            "/usr/bin/curl", "-s", "-L", "--max-time", "15",
+            "--cookie", root._cookieFile,
+            "-H", "User-Agent: " + ua,
+            "-H", "Accept: application/json, text/plain, */*",
+            "-H", "Accept-Language: en-US,en;q=0.9",
+            "-H", "Referer: https://www.reddit.com/",
+            url
+        ]
+        root._proc.running = true
     }
     
     function _isCacheValid(key) {

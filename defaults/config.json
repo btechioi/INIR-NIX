@@ -797,7 +797,7 @@
     "dock": {
         "enable": true,
         "enableBlurGlass": false,
-        "height": 60,
+        "height": 48,
         "hoverRegionHeight": 2,
         "hoverToReveal": true,
         "ignoredAppRegexes": [],
@@ -810,7 +810,7 @@
         "pinnedOnStartup": true,
         "screenList": [],
         "showBackground": true,
-        "iconSize": 35,
+        "iconSize": 28,
         "separatePinnedFromRunning": true,
         "enableDragReorder": true,
         "style": "panel"
