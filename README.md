@@ -182,6 +182,55 @@ Right sidebar:
 
 ---
 
+## NixOS / Nix Flake
+
+This fork packages iNiR as a **Nix flake overlay** with NixOS and Home Manager modules.
+Use it in your own `flake.nix` to get iNiR with all dependencies auto-installed.
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    niri-flake.url = "github:snowiow/niri-flake";
+    quickshell.url = "github:outfoxxed/quickshell";
+    inir-nix.url = "github:btechioi/INIR-NIX";
+    inir-nix.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs = { nixpkgs, home-manager, inir-nix, ... }: {
+    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
+      modules = [
+        inir-nix.nixosModules.inir        # ← INIR NixOS module
+        home-manager.nixosModules.home-manager {
+          home-manager.users.banumath = {
+            imports = [ inir-nix.homeModules.inir ];  # ← INIR HM module
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+**What the module provides:**
+- **NixOS module** (`nixosModules.inir`) — adds graphics (i915 modesetting), PipeWire audio,
+  NetworkManager, BlueZ Bluetooth, SDDM, PPD for power profiles, plus an `installDeps` option
+  that auto-installs all 40+ runtime dependencies (Quickshell, Qt6, cliphist, grim, PipeWire, fonts, etc.)
+- **Home Manager module** (`homeModules.inir`) — deploys Niri config, iNiR JSON config,
+  color palette pipeline, dotfile templates (Fish, Kitty, Foot, GTK/Qt themes, Fuzzel), and
+  wallpapers on first login
+
+**Quick rebuild after install:**
+```bash
+nix flake check && sudo nixos-rebuild switch --flake .#my-machine
+```
+
+> **Note:** This is NOT the upstream `snowarch/inir`. It's a fork that wraps iNiR as a Nix flake overlay.
+> For the Arch/manual install version, see the upstream repo.
+
+---
+
 ## Quick Start
 
 ```bash
