@@ -9,9 +9,10 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    quickshell.url = "github:outfoxxed/quickshell";
   };
 
-  outputs = { self, nixpkgs, niri-flake, nix-colors, home-manager }@inputs: let
+  outputs = { self, nixpkgs, niri-flake, nix-colors, home-manager, quickshell }@inputs: let
     systems = [ "x86_64-linux" "aarch64-linux" ];
     forAllSystems = nixpkgs.lib.genAttrs systems;
     mkPkgs = system: import nixpkgs { inherit system; };

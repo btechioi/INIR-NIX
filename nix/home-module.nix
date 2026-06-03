@@ -6,6 +6,13 @@ let
   inirConfigGen = pkgs.callPackage ./inir-config.nix { };
   colorPipeline = import ./color-pipeline.nix { inherit lib inputs; };
 
+  inirDeps = import ./packages.nix {
+    inherit pkgs;
+    quickshellPkg = if builtins.hasAttr "quickshell" inputs && inputs.quickshell ? packages.${pkgs.system}.default then
+      inputs.quickshell.packages.${pkgs.system}.default
+    else pkgs.quickshell;
+  };
+
   # Home directory reference (needed for xdg.configFile)
   homeDir = config.home.homeDirectory;
 
@@ -162,6 +169,12 @@ in {
       default = null;
       description = "Directory for wallpaper rotation";
     };
+
+    installDeps = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to automatically install runtime dependencies";
+    };
   };
 
   # Niri-flake HM module (conditional on inputs AND output availability)
@@ -170,8 +183,9 @@ in {
   ];
 
   config = lib.mkIf cfg.enable {
-    # Install the inir package
-    home.packages = [ inirPkg ];
+    # Install the inir package (and optional runtime deps)
+    home.packages = [ inirPkg ]
+      ++ lib.optionals cfg.installDeps (inirDeps.all ++ inirDeps.optional);
 
     # Runtime QML payload symlink — makes the shell runtime available
     # at the path Quickshell expects (~/.config/quickshell/inir)

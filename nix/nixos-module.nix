@@ -3,6 +3,12 @@ let
   cfg = config.programs.inir;
   inirPkg = pkgs.callPackage ./package.nix { };
   hasNiriFlake = builtins.hasAttr "niri-flake" inputs;
+  inirDeps = import ./packages.nix {
+    inherit pkgs;
+    quickshellPkg = if builtins.hasAttr "quickshell" inputs && inputs.quickshell ? packages.${pkgs.system}.default then
+      inputs.quickshell.packages.${pkgs.system}.default
+    else pkgs.quickshell;
+  };
 in {
   meta.maintainers = [ ];
 
@@ -72,6 +78,12 @@ in {
       default = true;
       description = "Whether to add niri.cachix.org binary cache";
     };
+
+    installDeps = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to automatically install runtime dependencies";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -85,7 +97,8 @@ in {
     }];
 
     # Install the inir package
-    environment.systemPackages = [ inirPkg ];
+    environment.systemPackages = [ inirPkg ]
+      ++ lib.optionals cfg.installDeps (inirDeps.all ++ inirDeps.optional);
 
     # Graphics
     hardware.graphics = lib.mkIf cfg.graphics.enable {
