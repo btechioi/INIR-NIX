@@ -60,7 +60,7 @@ let
 
   # Render an attrset to KDL recursively
   renderAttrs = indent: prefix: attrs: let
-    indentStr = lib.replicateString indent "  ";
+    indentStr = lib.concatStringsSep "" (builtins.genList (_: "  ") indent);
   in lib.concatStringsSep "\n" (lib.flatten (lib.mapAttrsToList (name: value:
     if name == "_node" then [] else
     if name == "binds" && isAttrs value then
