@@ -10,7 +10,11 @@ let
   homeDir = config.home.homeDirectory;
 
   # Generate a KDL config file for niri from the options tree
-  generatedNiriConfig = niriConfigGen.generate (lib.filterAttrsRecursive (n: _: n != "_module" && n != "_type") cfg.niri);
+  # Also appends spawn-at-startup for inir (avoids depending on HM niri module)
+  generatedNiriConfig = niriConfigGen.generate (lib.filterAttrsRecursive (n: _: n != "_module" && n != "_type") cfg.niri)
+    + lib.optionalString cfg.enable ''
+      spawn-at-startup "${inirPkg}/bin/inir" run --session
+    '';
 
   # Generate the inir config.json
   generatedInirConfig = inirConfigGen.generate cfg;
@@ -266,12 +270,7 @@ in {
       ILLOGICAL_IMPULSE_VIRTUAL_ENV = "${config.xdg.stateHome}/quickshell/.venv";
     };
 
-    # Autostart inir as a niri spawn-at-startup entry
-    # This is injected into the niri config via the KDL generator
-    programs.niri = lib.mkIf (builtins.hasAttr "niri" config.programs) {
-      extraConfig = ''
-        spawn-at-startup "${inirPkg}/bin/inir" run --session
-      '';
-    };
+    # Note: spawn-at-startup for inir is appended directly to the generated
+    # niri config KDL above, avoiding a dependency on the HM niri module.
   };
 }
