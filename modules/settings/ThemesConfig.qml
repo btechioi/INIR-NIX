@@ -1386,6 +1386,46 @@ ContentPage {
     }
 
     SettingsCardSection {
+        expanded: true
+        icon: "fit_screen"
+        title: Translation.tr("Compact Mode")
+
+        SettingsGroup {
+            ContentSubsection {
+                title: Translation.tr("Mode")
+
+                ConfigSelectionArray {
+                    currentValue: {
+                        const v = Config.options?.appearance?.compact;
+                        if (v === true) return "on";
+                        if (v === false) return "off";
+                        return "auto";
+                    }
+                    onSelected: newValue => {
+                        if (newValue === "on") Config.setNestedValue("appearance.compact", true);
+                        else if (newValue === "off") Config.setNestedValue("appearance.compact", false);
+                        else Config.setNestedValue("appearance.compact", "auto");
+                    }
+                    options: [
+                        { displayName: Translation.tr("Auto"),  icon: "auto_mode",  value: "auto" },
+                        { displayName: Translation.tr("On"),    icon: "check_box",  value: "on" },
+                        { displayName: Translation.tr("Off"),   icon: "check_box_outline_blank", value: "off" }
+                    ]
+                }
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                text: Translation.tr("Reduce chrome size on smaller screens. Auto enables compact mode when the primary screen is 1400px or narrower, or 800px or shorter.")
+                color: Appearance.colors.colSubtext
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                wrapMode: Text.WordWrap
+            }
+        }
+    }
+
+    SettingsCardSection {
         visible: Appearance.auroraEverywhere && !Appearance.angelEverywhere
         expanded: false
         icon: "blur_on"

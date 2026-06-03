@@ -360,6 +360,21 @@ Singleton {
     // Typography scale factor from config
     property real fontSizeScale: Config.options?.appearance?.typography?.sizeScale ?? 1.0
 
+    // ── Compact mode ──────────────────────────────────────────────
+    // Reduces chrome dimensions (bar, sidebar, dock, margins, popups)
+    // on smaller screens while keeping font sizes unchanged.
+    // "auto" detects based on primary screen size.
+    // true/false force the mode regardless of screen size.
+    readonly property bool compactMode: {
+        const setting = Config.options?.appearance?.compact;
+        if (setting === true) return true;
+        if (setting === false) return false;
+        // "auto": detect from primary screen
+        const screen = GlobalStates?.primaryScreen;
+        if (!screen) return false;
+        return (screen.height ?? 1080) <= 800 || (screen.width ?? 1920) <= 1400;
+    }
+
     // Theme Metadata Logic
     readonly property var activeThemePreset: ThemePresets.getPreset(Config.options?.appearance?.theme ?? "auto")
     readonly property var _themeMeta: activeThemePreset.meta || {}
@@ -870,33 +885,69 @@ Singleton {
         readonly property int roundingLarge: Config.options?.appearance?.angel?.rounding?.large ?? 25
     }
 
-     sizes: QtObject {
-         property real spacingSmall: Math.round(8 * root.fontSizeScale)
-         property real spacingMedium: Math.round(12 * root.fontSizeScale)
-         property real spacingLarge: Math.round(16 * root.fontSizeScale)
-        property real baseBarHeight: Math.round(40 * root.fontSizeScale)
-        property real barHeight: (((Config.options?.bar?.cornerStyle ?? 0) === 1) || ((Config.options?.bar?.cornerStyle ?? 0) === 3)) ? 
+    sizes: QtObject {
+        // Compact mode: values swap based on compactMode
+        property real spacingSmall: root.compactMode
+            ? Math.round(6 * root.fontSizeScale)
+            : Math.round(8 * root.fontSizeScale)
+        property real spacingMedium: root.compactMode
+            ? Math.round(8 * root.fontSizeScale)
+            : Math.round(12 * root.fontSizeScale)
+        property real spacingLarge: root.compactMode
+            ? Math.round(12 * root.fontSizeScale)
+            : Math.round(16 * root.fontSizeScale)
+        property real baseBarHeight: root.compactMode
+            ? Math.round(32 * root.fontSizeScale)
+            : Math.round(40 * root.fontSizeScale)
+        property real barHeight: (((Config.options?.bar?.cornerStyle ?? 0) === 1) || ((Config.options?.bar?.cornerStyle ?? 0) === 3)) ?
             (baseBarHeight + root.sizes.hyprlandGapsOut * 2) : baseBarHeight
-        property real barCenterSideModuleWidth: (Config.options?.bar?.verbose ?? true) ? Math.round(360 * root.fontSizeScale) : Math.round(140 * root.fontSizeScale)
-        property real barCenterSideModuleWidthShortened: Math.round(280 * root.fontSizeScale)
+        property real barCenterSideModuleWidth: (Config.options?.bar?.verbose ?? true)
+            ? (root.compactMode ? Math.round(280 * root.fontSizeScale) : Math.round(360 * root.fontSizeScale))
+            : Math.round(140 * root.fontSizeScale)
+        property real barCenterSideModuleWidthShortened: root.compactMode
+            ? Math.round(220 * root.fontSizeScale)
+            : Math.round(280 * root.fontSizeScale)
         property real barCenterSideModuleWidthHellaShortened: Math.round(190 * root.fontSizeScale)
-        property real barShortenScreenWidthThreshold: 1200 // Shorten if screen width is at most this value
-        property real barHellaShortenScreenWidthThreshold: 1000 // Shorten even more...
-        property real elevationMargin: Math.round(10 * root.fontSizeScale)
+        property real barShortenScreenWidthThreshold: 1200
+        property real barHellaShortenScreenWidthThreshold: 1000
+        property real elevationMargin: root.compactMode
+            ? Math.round(6 * root.fontSizeScale)
+            : Math.round(10 * root.fontSizeScale)
         property real fabShadowRadius: 5
         property real fabHoveredShadowRadius: 7
-        property real hyprlandGapsOut: 5
-        property real mediaControlsWidth: Math.round(380 * root.fontSizeScale)
-        property real mediaControlsHeight: Math.round(150 * root.fontSizeScale)
-        property real notificationPopupWidth: Math.round(410 * root.fontSizeScale)
-        property real osdWidth: Math.round(180 * root.fontSizeScale)
-        property real searchWidthCollapsed: Math.round(210 * root.fontSizeScale)
-        property real searchWidth: Math.round(360 * root.fontSizeScale)
-        property real sidebarWidth: Math.round(460 * root.fontSizeScale)
-        property real sidebarWidthExtended: Math.round(750 * root.fontSizeScale)
-        property real baseVerticalBarWidth: Math.round(46 * root.fontSizeScale)
-        property real verticalBarWidth: (((Config.options?.bar?.cornerStyle ?? 0) === 1) || ((Config.options?.bar?.cornerStyle ?? 0) === 3)) ? 
+        property real hyprlandGapsOut: root.compactMode ? 3 : 5
+        property real mediaControlsWidth: root.compactMode
+            ? Math.round(300 * root.fontSizeScale)
+            : Math.round(380 * root.fontSizeScale)
+        property real mediaControlsHeight: root.compactMode
+            ? Math.round(120 * root.fontSizeScale)
+            : Math.round(150 * root.fontSizeScale)
+        property real notificationPopupWidth: root.compactMode
+            ? Math.round(340 * root.fontSizeScale)
+            : Math.round(410 * root.fontSizeScale)
+        property real osdWidth: root.compactMode
+            ? Math.round(150 * root.fontSizeScale)
+            : Math.round(180 * root.fontSizeScale)
+        property real searchWidthCollapsed: root.compactMode
+            ? Math.round(170 * root.fontSizeScale)
+            : Math.round(210 * root.fontSizeScale)
+        property real searchWidth: root.compactMode
+            ? Math.round(290 * root.fontSizeScale)
+            : Math.round(360 * root.fontSizeScale)
+        property real sidebarWidth: root.compactMode
+            ? Math.round(340 * root.fontSizeScale)
+            : Math.round(460 * root.fontSizeScale)
+        property real sidebarWidthExtended: root.compactMode
+            ? Math.round(540 * root.fontSizeScale)
+            : Math.round(750 * root.fontSizeScale)
+        property real baseVerticalBarWidth: root.compactMode
+            ? Math.round(36 * root.fontSizeScale)
+            : Math.round(46 * root.fontSizeScale)
+        property real verticalBarWidth: (((Config.options?.bar?.cornerStyle ?? 0) === 1) || ((Config.options?.bar?.cornerStyle ?? 0) === 3)) ?
             (baseVerticalBarWidth + root.sizes.hyprlandGapsOut * 2) : baseVerticalBarWidth
+        property real dockHeight: root.compactMode
+            ? Math.round(48 * root.fontSizeScale)
+            : Math.round(60 * root.fontSizeScale)
         // Legacy selector fixed-card sizing (kept for compatibility; skwd-wall selector computes layout internally)
         property real wallpaperSelectorWidth: 1200
         property real wallpaperSelectorHeight: 690

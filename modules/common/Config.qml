@@ -430,6 +430,7 @@ Singleton {
             property JsonObject appearance: JsonObject {
                 property string theme: "auto" // Theme preset ID: "auto" for wallpaper-based, or preset name like "gruvbox-dark", "catppuccin-mocha", "custom", etc.
                 property string globalStyle: "material" // "material" | "cards" | "aurora" | "inir" | "angel"
+                property variant compact: "auto" // "auto" | true | false — compact chrome sizing
                 property JsonObject aurora: JsonObject {
                     property JsonObject transparency: JsonObject {
                         property real overlay: 0.38       // Main panels

@@ -71,7 +71,7 @@ Scope {
 
                 property bool reveal: !GlobalStates.coverflowSelectorOpen && GlobalStates.shellEntryReady && (root.pinned || (Config.options?.dock?.hoverToReveal && dockMouseArea.containsMouse) || (dockApps?.requestDockShow || dockAppsVertical?.requestDockShow) || (Config.options?.dock?.showOnDesktop !== false && !ToplevelManager.activeToplevel?.activated))
 
-                readonly property real dockHeight: Config.options?.dock?.height ?? 70
+                readonly property real dockHeight: Config.options?.dock?.height ?? Appearance.sizes.dockHeight
 
                 anchors {
                     top: root.isTop || root.isVertical
