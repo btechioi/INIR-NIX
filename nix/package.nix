@@ -24,6 +24,8 @@ stdenv.mkDerivation rec {
   dontConfigure = true;
   dontPatchShebangs = true;
 
+  patches = [ ./gamemode-qml.patch ];
+
   installPhase = ''
     # 1. Install the main launcher binary
     install -Dm755 scripts/inir $out/bin/inir

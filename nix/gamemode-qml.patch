@@ -1,0 +1,65 @@
+--- a/services/GameMode.qml
++++ b/services/GameMode.qml
+@@ -378,6 +378,10 @@
+         if (root.disableDiscoverOverlay) {
+             discoverOverlayDebounce.restart()
+         }
++
++        // Feral GameMode daemon — sync with gamemoded via D-Bus
++        gamemodeDaemonDebounce.restart()
++
+     }
+ 
+     // Track last applied state for discover-overlay control
+@@ -431,4 +435,51 @@
+             root._log("[GameMode] systemctl start exited:", code)
+         }
+     }
++
++    // ── Feral GameMode daemon ─────────────────────────────────────────────
++    // When GameMode activates, call gamemoded RegisterGame (enables CPU
++    // governor + GPU perf optimizations). On deactivation, call UnregisterGame.
++    // Complements INIR's own shell-side optimizations with real system-level
++    // performance tuning for games.
++
++    property bool _lastFeralGameModeState: false
++
++    Timer {
++        id: gamemodeDaemonDebounce
++        interval: 500
++        repeat: false
++        onTriggered: {
++            const shouldActivate = root.active
++            if (shouldActivate === root._lastFeralGameModeState)
++                return
++            root._lastFeralGameModeState = shouldActivate
++
++            if (shouldActivate) {
++                gamemodectl.command = [
++                    "/usr/bin/dbus-send",
++                    "--session",
++                    "--dest=org.freedesktop.portal.GameMode",
++                    "/org/freedesktop/portal/GameMode",
++                    "org.freedesktop.portal.GameMode.RegisterGame"
++                ]
++            } else {
++                gamemodectl.command = [
++                    "/usr/bin/dbus-send",
++                    "--session",
++                    "--dest=org.freedesktop.portal.GameMode",
++                    "/org/freedesktop/portal/GameMode",
++                    "org.freedesktop.portal.GameMode.UnregisterGame"
++                ]
++            }
++            gamemodectl.running = true
++        }
++    }
++
++    Process {
++        id: gamemodectl
++        running: false
++        onExited: (code, status) => {
++            root._log("[GameMode] gamemoded call exited:", code)
++        }
++    }
+ }
