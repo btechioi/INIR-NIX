@@ -31,6 +31,20 @@
       default = self.packages.${system}.inir;
     });
 
+    formatter = forAllSystems (system: (mkPkgs system).nixpkgs-fmt);
+
+    devShells = forAllSystems (system: {
+      default = (mkPkgs system).mkShell {
+        packages = with (mkPkgs system); [ nixpkgs-fmt statix deadnix ];
+        shellHook = ''
+          echo " iNiR dev shell"
+          echo "  nixpkgs-fmt  — Nix formatter"
+          echo "  statix       — Nix linter"
+          echo "  deadnix      — Nix dead code analyzer"
+        '';
+      };
+    });
+
     # Example NixOS configuration (see docs/HOWTO.md for full usage)
     nixosConfigurations.example = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";

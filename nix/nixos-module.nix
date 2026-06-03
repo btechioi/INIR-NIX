@@ -115,6 +115,7 @@ in {
       extraPortals = with pkgs; [ xdg-desktop-portal-gtk ];
       # Explicitly avoid gnome portal
       configPackages = lib.mkForce [ ];
+      config.common.default = "*";
     };
 
     # Binary cache (Cachix for niri)

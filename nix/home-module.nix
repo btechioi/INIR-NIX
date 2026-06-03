@@ -203,7 +203,10 @@ in {
         };
       }
 
-      # App dotfiles (only when palette is available via nix-colors)
+      # Theme-optimised static dotfiles — these ship with iNiR and are tuned for Material You colours.
+      # They are NOT palette-interpolated templates; they use the static defaults bundled into the
+      # Nix store. If you want palette-interpolated configs, use nix-colors directly to template
+      # each file with dynamic colour values.
       (lib.mkIf (palette != null) {
         "alacritty/alacritty.toml".text = builtins.readFile ./dotfiles/alacritty.toml;
         "foot/foot.ini".text = builtins.readFile ./dotfiles/foot.ini;

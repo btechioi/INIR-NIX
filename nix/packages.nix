@@ -47,7 +47,9 @@ in rec {
   all = core ++ quickshell ++ audio ++ screencapture ++ toolkit ++ fonts;
 
   # Optional packages (only if available in nixpkgs)
-  optional = with pkgs; lib.optionals (builtins.tryEval (builtins.hasAttr "materialyoucolor" python3Packages)).success [
+  optional = with pkgs; let
+    matugen = builtins.tryEval python3Packages.materialyoucolor;
+  in lib.optionals (matugen.success && matugen.value != null) [
     python3Packages.materialyoucolor
   ];
 }
