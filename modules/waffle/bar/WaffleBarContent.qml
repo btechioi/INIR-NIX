@@ -23,7 +23,7 @@ Rectangle {
     readonly property real _screenH: panelScreen?.height ?? Quickshell.screens[0]?.height ?? 1080
     color: root.glassActive ? "transparent" : Looks.colors.bg0
     clip: true
-    implicitHeight: Looks.scaledBar(48, panelScreen)
+    implicitHeight: Looks.scaledBar(Appearance.compactMode ? 36 : 48, panelScreen)
 
     // Right-click context menu anchor (invisible, positioned at click)
     Item {

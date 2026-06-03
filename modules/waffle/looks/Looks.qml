@@ -361,6 +361,13 @@ Singleton {
         
         property int velocity: 850
 
+        // Speed multiplier from global appearance setting (0.25-4.0, default 1.0)
+        // All duration.* properties divide their base value by this multiplier.
+        // When speedMultiplier > 1, animations are faster (shorter durations).
+        // When speedMultiplier < 1, animations are slower (longer durations).
+        // ?? 1.0 provides a safe fallback if Appearance.animationSpeed is undefined.
+        property real speedMultiplier: Appearance.animationSpeed ?? 1.0
+
         // Windows 11 / Fluent Design inspired easing curves
         property QtObject easing: QtObject {
             property QtObject bezierCurve: QtObject {
@@ -385,21 +392,25 @@ Singleton {
         }
         
         // Duration presets (in ms) - tuned for Windows 11 feel
+        // All values are divided by transition.speedMultiplier (from Appearance.animationSpeed)
+        // so users can speed up or slow down all waffle animations.
+        // Math.max(1, ...) ensures no zero/negative durations.
+        // instant stays at 0 (no animation - no speed scaling needed).
         property QtObject duration: QtObject {
-            readonly property int instant: 0
-            readonly property int ultraFast: 67      // ~4 frames at 60fps
-            readonly property int fast: 100
-            readonly property int normal: 150
-            readonly property int medium: 200
-            readonly property int slow: 300
-            readonly property int panel: 250         // Slightly faster panels
-            readonly property int overlay: 300
-            readonly property int page: 350          // Page transitions
-            readonly property int chromeHover: 90
-            readonly property int chromePress: 120
-            readonly property int chromeRelease: 170
-            readonly property int chromeMove: 170
-            readonly property int chromePanel: 220
+            property int instant: 0
+            property int ultraFast: Math.max(1, Math.round(67 / transition.speedMultiplier))
+            property int fast: Math.max(1, Math.round(100 / transition.speedMultiplier))
+            property int normal: Math.max(1, Math.round(150 / transition.speedMultiplier))
+            property int medium: Math.max(1, Math.round(200 / transition.speedMultiplier))
+            property int slow: Math.max(1, Math.round(300 / transition.speedMultiplier))
+            property int panel: Math.max(1, Math.round(250 / transition.speedMultiplier))
+            property int overlay: Math.max(1, Math.round(300 / transition.speedMultiplier))
+            property int page: Math.max(1, Math.round(350 / transition.speedMultiplier))
+            property int chromeHover: Math.max(1, Math.round(90 / transition.speedMultiplier))
+            property int chromePress: Math.max(1, Math.round(120 / transition.speedMultiplier))
+            property int chromeRelease: Math.max(1, Math.round(170 / transition.speedMultiplier))
+            property int chromeMove: Math.max(1, Math.round(170 / transition.speedMultiplier))
+            property int chromePanel: Math.max(1, Math.round(220 / transition.speedMultiplier))
         }
 
         // === Basic transitions (improved) ===
