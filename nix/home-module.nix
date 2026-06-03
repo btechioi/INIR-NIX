@@ -160,8 +160,8 @@ in {
     };
   };
 
-  # Niri-flake HM module (conditional on inputs availability — top-level, not inside config)
-  imports = lib.optionals (builtins.hasAttr "niri-flake" inputs) [
+  # Niri-flake HM module (conditional on inputs AND output availability)
+  imports = lib.optionals (builtins.hasAttr "niri-flake" inputs && builtins.hasAttr "homeManagerModules" inputs.niri-flake) [
     inputs.niri-flake.homeManagerModules.niri
   ];
 
