@@ -15,7 +15,7 @@ in rec {
     qt6.qtwayland qt6.qtmultimedia qt6.qtpositioning
     qt6.qtvirtualkeyboard kdePackages.kirigami
     kdePackages.plasma-integration
-    breeze-icons
+    kdePackages.breeze-icons
   ];
 
   # Audio
